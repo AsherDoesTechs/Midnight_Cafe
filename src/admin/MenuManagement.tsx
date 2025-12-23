@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
-import { Plus, Loader2, Lock, Unlock, ShieldCheck, QrCode } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Plus, Loader2, Lock, ShieldCheck, QrCode } from "lucide-react";
 import { supabase } from ".././libs/supabaseClient";
 import MenuTable from "../admin/ComponentsAdmin/MenuTable";
 import EditMenuModal from "../admin/ComponentsAdmin/EditMenuModal";

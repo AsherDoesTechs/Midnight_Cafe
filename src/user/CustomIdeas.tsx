@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import * as React from "react";
 import { Lightbulb, Send, PlusCircle } from "lucide-react";
 import { supabase } from "../libs/supabaseClient";
 

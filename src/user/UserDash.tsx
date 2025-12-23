@@ -1,9 +1,9 @@
 // src/user/UserDash.tsx (CLEANED ALIGNMENT)
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import * as React from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ShoppingBag,
   Heart,
   Lightbulb,
   User,

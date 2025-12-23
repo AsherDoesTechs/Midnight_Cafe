@@ -1,5 +1,3 @@
-import React from "react";
-
 export default function BookingSummary() {
   const booking = localStorage.getItem("latestBooking");
 
