@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Smooth scroll for anchor links */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Root font and color scheme */
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark; /* Modern color-scheme property for light/dark mode */
+  color: #d0c8b3; /* Soft warm text color for night vibe */
+  font-synthesis: none;
+  text-rendering: auto; /* Changed from 'optimizeLegibility' for better browser support */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Light mode adjustments */
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+}
+
+/* Base link styles for accessibility and subtle colors */
+a {
+  font-weight: 500;
+  color: #f1a7c5; /* soft pink accent */
+  text-decoration: inherit;
+}
+
+a:hover {
+  color: #f3b3cd;
+}
+
+/* Minimal button reset */
+button {
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 500;
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  transition: all 0.25s ease;
+}
+
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* Layout resets */
+body,
+html {
+  margin: 0;
+  padding: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+/* Animated background gradient */
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
+  100% {
+    background-position: 0% 0%;
+  }
+}
+
+body {
+  animation: gradientShift 60s ease infinite; /* Apply the gradient shift animation */
+}
+
+/* Holographic border animation for accents */
+@keyframes holoBorder {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-holoBorder {
+  background-size: 200% 200%;
+  animation: holoBorder 4s linear infinite;
+}

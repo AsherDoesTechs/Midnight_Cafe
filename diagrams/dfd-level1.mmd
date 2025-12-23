@@ -1,0 +1,91 @@
+%% Level-1 Data Flow Diagram (Mermaid)
+%% File: diagrams/dfd-level1.mmd
+%% Shows the major subsystems and data stores for the BatCafe app
+
+```mermaid
+flowchart TB
+  %% External Actors / Frontend
+  subgraph FE [Web Frontend (React)]
+    direction TB
+    U[User / Guest / Admin]
+    U -->|Interact: browse, login, order, book| UI[UI Pages & Components]
+  end
+
+  %% Backend services
+  subgraph API [BatCafe API (Express)]
+    direction TB
+    A1[Auth Service\n(/api/auth/*)]
+    A2[Menu Service\n(/api/menu, /api/upload)]
+    A3[Orders & Booking Service\n(/api/orders, /api/bookings)]
+    A4[Analytics Service\n(/api/orders/analytics)]
+    A5[Activity Logs Service\n(/api/logs)]
+    A6[Custom Features\n(/api/custom/*)]
+    A7[Contact Service\n(/api/contact)]
+  end
+
+  %% Database (MySQL) and file/email externals
+  subgraph DB [(MySQL Database)]
+    direction LR
+    MI[(menu_items)]
+    UST[(Users)]
+    CO[(Combined_Orders)]
+    FO[(Food_Orders)]
+    FOI[(Food_Order_Items)]
+    BK[(bookings)]
+    SP[(spaces)]
+    UAL[(User_Activity_Logs)]
+    UF[(User_Favorites)]
+    CI[(Custom_Ideas)]
+    CM[(contact_messages)]
+  end
+
+  FileStore[File Store\n`public/uploads/`]:::file
+  EmailSvc[(Email Service - SMTP)]:::ext
+
+  %% Frontend -> Backend interactions
+  UI -->|POST /api/auth (login, magic-link, guest)| A1
+  UI -->|GET/POST /api/menu, POST /api/upload| A2
+  UI -->|POST /api/orders (checkout)| A3
+  UI -->|POST /api/bookings| A3
+  UI -->|GET /api/orders, GET /bookings/schedule| A3
+  UI -->|GET /api/orders/analytics| A4
+  UI -->|GET /api/logs| A5
+  UI -->|GET/POST /api/custom/*| A6
+  UI -->|POST /api/contact| A7
+
+  %% Backend -> Database / external services
+  A1 -->|read/write user & auth data| UST
+  A1 -->|insert activity logs| UAL
+
+  A2 -->|read/write menu items| MI
+  A2 -->|store image files| FileStore
+
+  A3 -->|create/read food orders| FO
+  A3 -->|create/read food order items| FOI
+  A3 -->|create/read bookings| BK
+  A3 -->|write/read combined orders| CO
+  A3 -->|read spaces| SP
+  A3 -->|read user info| UST
+
+  A4 -->|aggregate reads (revenue/sales)| CO
+  A4 -->|aggregate reads| FO
+  A4 -->|aggregate reads| FOI
+
+  A5 -->|read logs| UAL
+
+  A6 -->|read/write favorites| UF
+  A6 -->|read/write ideas| CI
+
+  A7 -->|send email (magic links, contact)| EmailSvc
+  A7 -->|store messages| CM
+
+  %% Cookies / session indicators (bidirectional relationship)
+  U ---|receives/holds `session_token` cookie| A1
+  U ---|receives/holds `guest_uid` cookie| A3
+
+  classDef file fill:#fff3cd,stroke:#c1a05a;
+  classDef ext fill:#e6ffed,stroke:#6aa36a;
+
+```
+
+%% End of file
