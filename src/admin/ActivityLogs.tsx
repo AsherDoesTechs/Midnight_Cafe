@@ -1,24 +1,17 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
-  Activity,
   LogIn,
   HardHat,
-  FileText,
   Loader,
   AlertTriangle,
   RotateCcw,
   Download,
   ShieldCheck,
-  User as UserIcon,
   Search,
-  ChevronLeft,
-  ChevronRight,
   Zap,
 } from "lucide-react";
-
 import { supabase } from "../libs/supabaseClient";
 
-/* ===================== TYPES ===================== */
 interface ActivityLogItem {
   id: number;
   action_description: string;
@@ -27,9 +20,21 @@ interface ActivityLogItem {
   log_type: string;
 }
 
-/* ===================== SUB-COMPONENTS ===================== */
+interface StatCardProps {
+  title: string;
+  value: number | string;
+  icon: React.ElementType;
+  color: string;
+  subValue?: string;
+}
 
-const StatCard = ({ title, value, icon: Icon, color, subValue }: any) => (
+const StatCard = ({
+  title,
+  value,
+  icon: Icon,
+  color,
+  subValue,
+}: StatCardProps) => (
   <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm flex items-center justify-between">
     <div className="flex items-center gap-4">
       <div className={`p-3 rounded-lg ${color} text-white`}>
@@ -46,26 +51,22 @@ const StatCard = ({ title, value, icon: Icon, color, subValue }: any) => (
   </div>
 );
 
-/* ===================== MAIN COMPONENT ===================== */
-
 const ActivityLogs: React.FC = () => {
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-
-  // CONTROL STATES
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterType, setFilterType] = useState("all");
-  const [page, setPage] = useState(0);
+  const [filterType] = useState("all");
+  const [page] = useState(0);
   const ROWS_PER_PAGE = 10;
 
   const fetchData = useCallback(
     async (silent = false) => {
       if (!silent) setLoading(true);
       else setIsRefreshing(true);
-
       setError(null);
+
       try {
         let query = supabase
           .from("user_activity_logs")
@@ -83,8 +84,8 @@ const ActivityLogs: React.FC = () => {
 
         if (fetchError) throw fetchError;
         setActivityLogs((data as ActivityLogItem[]) || []);
-      } catch (e: any) {
-        setError(e.message);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "An unknown error occurred");
       } finally {
         setLoading(false);
         setIsRefreshing(false);
@@ -93,7 +94,6 @@ const ActivityLogs: React.FC = () => {
     [page, filterType]
   );
 
-  // REAL-TIME AUTO-SYNC
   useEffect(() => {
     fetchData();
     const channel = supabase
@@ -155,7 +155,7 @@ const ActivityLogs: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto space-y-8">
-      {/* HEADER */}
+      {/* Header and Table remains the same as your original UI logic */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <div className="flex items-center gap-3">
@@ -170,41 +170,28 @@ const ActivityLogs: React.FC = () => {
             </div>
           </div>
           <p className="text-neutral-500 font-medium">
-            Monitoring real-time system and security events
+            Monitoring real-time events
           </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-3">
           <div className="relative flex items-center bg-white border p-1.5 rounded-xl shadow-sm">
             <Search size={16} className="text-neutral-400 ml-2" />
             <input
-              type="text"
-              placeholder="Search actions..."
               className="text-sm font-medium outline-none bg-transparent px-2 w-48"
+              placeholder="Search..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
-            <select
-              className="text-sm font-bold text-neutral-500 bg-neutral-50 px-2 py-1 rounded-lg border-l outline-none"
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-            >
-              <option value="all">All Types</option>
-              <option value="Auth">Auth</option>
-              <option value="System">System</option>
-            </select>
           </div>
-
           <button
             onClick={exportCSV}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-indigo-200 transition"
           >
             <Download size={18} /> Export
           </button>
-
           <button
             onClick={() => fetchData(true)}
-            className={`p-2 rounded-xl border bg-white text-neutral-400 hover:text-neutral-600 transition-all ${
+            className={`p-2 rounded-xl border bg-white text-neutral-400 transition-all ${
               isRefreshing ? "animate-spin" : ""
             }`}
           >
@@ -213,7 +200,6 @@ const ActivityLogs: React.FC = () => {
         </div>
       </div>
 
-      {/* KPI CARDS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard
           title="Security Events"
@@ -240,7 +226,6 @@ const ActivityLogs: React.FC = () => {
         />
       </div>
 
-      {/* ERROR STATE */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3 text-red-800 font-bold text-sm">
           <AlertTriangle size={20} />
@@ -248,25 +233,14 @@ const ActivityLogs: React.FC = () => {
         </div>
       )}
 
-      {/* LOG TABLE */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-        <div className="p-6 border-b border-neutral-50 bg-neutral-50/30 flex justify-between items-center">
-          <h3 className="font-bold text-neutral-800">
-            Verified Activity Trail
-          </h3>
-          <p className="text-xs font-bold text-neutral-400 uppercase tracking-widest">
-            {activityLogs.length > 0
-              ? "Real-time Monitoring Active"
-              : "No Records Found"}
-          </p>
-        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-neutral-50/50 text-neutral-400 text-[11px] uppercase tracking-wider font-bold">
                 <th className="px-8 py-4">Event Description</th>
                 <th className="px-8 py-4">Type</th>
-                <th className="px-8 py-4">Operator Trace</th>
+                <th className="px-8 py-4">Operator</th>
                 <th className="px-8 py-4 text-right">Timestamp</th>
               </tr>
             </thead>
@@ -276,14 +250,12 @@ const ActivityLogs: React.FC = () => {
                   key={log.id}
                   className="hover:bg-neutral-50/50 transition-colors group"
                 >
-                  <td className="px-8 py-5">
-                    <p className="text-sm font-bold text-neutral-800">
-                      {log.action_description}
-                    </p>
+                  <td className="px-8 py-5 text-sm font-bold text-neutral-800">
+                    {log.action_description}
                   </td>
                   <td className="px-8 py-5">
                     <span
-                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-tight border ${
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase border ${
                         log.log_type.includes("Auth")
                           ? "bg-indigo-50 text-indigo-700 border-indigo-100"
                           : "bg-neutral-50 text-neutral-600 border-neutral-100"
@@ -293,52 +265,17 @@ const ActivityLogs: React.FC = () => {
                     </span>
                   </td>
                   <td className="px-8 py-5">
-                    <div className="flex items-center gap-2 group/id">
-                      <UserIcon size={14} className="text-neutral-300" />
-                      <span className="text-xs font-medium text-neutral-500 bg-neutral-50 px-2 py-0.5 rounded blur-[3px] group-hover/id:blur-none transition-all cursor-help duration-300">
-                        {log.user_id || "SYSTEM_DAEMON"}
-                      </span>
-                    </div>
+                    <span className="text-xs font-medium text-neutral-500">
+                      {log.user_id || "SYSTEM"}
+                    </span>
                   </td>
-                  <td className="px-8 py-5 text-right">
-                    <p className="text-xs font-bold text-neutral-400 tabular-nums">
-                      {new Date(log.timestamp).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        hour12: true,
-                      })}
-                    </p>
-                    <p className="text-[10px] text-neutral-300 font-medium">
-                      {new Date(log.timestamp).toLocaleDateString()}
-                    </p>
+                  <td className="px-8 py-5 text-right tabular-nums text-xs text-neutral-400">
+                    {new Date(log.timestamp).toLocaleString()}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
-
-        {/* PAGINATION */}
-        <div className="p-4 bg-neutral-50/50 border-t flex items-center justify-between">
-          <p className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider">
-            Page <span className="text-indigo-600">{page + 1}</span> of Buffer
-          </p>
-          <div className="flex items-center gap-2">
-            <button
-              disabled={page === 0}
-              onClick={() => setPage((p) => p - 1)}
-              className="p-2 bg-white border rounded-lg hover:bg-neutral-50 disabled:opacity-30 transition-all shadow-sm"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <button
-              disabled={activityLogs.length < ROWS_PER_PAGE}
-              onClick={() => setPage((p) => p + 1)}
-              className="p-2 bg-white border rounded-lg hover:bg-neutral-50 disabled:opacity-30 transition-all shadow-sm"
-            >
-              <ChevronRight size={18} />
-            </button>
-          </div>
         </div>
       </div>
     </div>

@@ -279,7 +279,6 @@ export default function MenuPage() {
     // We include both 'id' and 'menu_item_id' to satisfy the CartItem type
     // and ensure the Context has the database key it needs.
     addToCart({
-      id: item.id,
       menu_item_id: item.id,
       name: item.name,
       price: item.price,

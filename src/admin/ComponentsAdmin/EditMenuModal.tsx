@@ -1,5 +1,3 @@
-// components/EditMenuModal.tsx
-
 import React, { useState, useEffect } from "react";
 import {
   Save,
@@ -18,8 +16,6 @@ import {
   dietOptions,
   statusOptions,
 } from "../../utils/menu-utils";
-
-// --- SUB-COMPONENT: Image Upload Form Section ---
 
 interface ImageUploadFormSectionProps {
   item: Partial<MenuItem>;
@@ -47,15 +43,17 @@ const ImageUploadFormSection: React.FC<ImageUploadFormSectionProps> = ({
   const labelStyle =
     "text-sm font-semibold text-gray-700 flex items-center gap-2 mb-1";
 
-  // Handle local preview generation and cleanup
   useEffect(() => {
+    let objectUrl = "";
     if (imageFile) {
-      const objectUrl = URL.createObjectURL(imageFile);
+      objectUrl = URL.createObjectURL(imageFile);
       setPreviewUrl(objectUrl);
-      return () => URL.revokeObjectURL(objectUrl);
     } else {
       setPreviewUrl(item.image || "");
     }
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
   }, [imageFile, item.image]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -122,8 +120,6 @@ const ImageUploadFormSection: React.FC<ImageUploadFormSectionProps> = ({
   );
 };
 
-// --- MAIN MODAL COMPONENT ---
-
 interface EditMenuModalProps {
   isOpen: boolean;
   item: Partial<MenuItem>;
@@ -132,7 +128,11 @@ interface EditMenuModalProps {
   isUploading: boolean;
   onSave: () => void;
   onCancel: () => void;
-  onFormChange: (e: React.ChangeEvent<any>) => void;
+  onFormChange: (
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
+    >
+  ) => void;
   onFileChange: (file: File | null) => void;
 }
 
@@ -155,13 +155,13 @@ const EditMenuModal: React.FC<EditMenuModalProps> = ({
     "text-sm font-semibold text-gray-700 flex items-center gap-2 mb-1";
   const groupStyle = "space-y-1.5";
 
-  // FIXED: Handle price as string to prevent .toFixed() crashes on input
   const handlePriceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/[^0-9.]/g, "");
     const parts = value.split(".");
     if (parts.length > 2) value = `${parts[0]}.${parts[1]}`;
     if (parts[1]) value = `${parts[0]}.${parts[1].slice(0, 2)}`;
 
+    // Cast as any here to simulate the target object since onFormChange expects a real event
     onFormChange({
       target: { name: "price", value: value },
     } as any);
@@ -248,9 +248,8 @@ const EditMenuModal: React.FC<EditMenuModalProps> = ({
                 <List size={16} /> Dietary Tags
               </label>
               <select
-                name="diet_tags" // This name tells handleEditChange what to update
+                name="diet_tags"
                 multiple
-                // Use optional chaining or default to empty array to prevent crashes
                 value={item.diet_tags || []}
                 onChange={onFormChange}
                 className={`${inputStyle} h-28 cursor-pointer`}
@@ -274,7 +273,7 @@ const EditMenuModal: React.FC<EditMenuModalProps> = ({
                 <input
                   type="text"
                   name="price"
-                  value={item.price ?? ""} // FIXED: Removed .toFixed() which causes crashes during typing
+                  value={item.price ?? ""}
                   onChange={handlePriceChange}
                   className={`${inputStyle} pl-7 font-mono`}
                   placeholder="0.00"

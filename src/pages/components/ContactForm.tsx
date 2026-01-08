@@ -1,22 +1,24 @@
 import React, { useContext, useState } from "react";
 import { CartContext } from "../../context/CartContext";
 import { saveBooking } from "../../utils/Bookings";
-import { toast } from "react-toastify"; // Import toast for notifications
-import "react-toastify/dist/ReactToastify.css"; // Ensure CSS is included
+import { toast } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 export default function ContactForm() {
-  const cartContext = useContext(CartContext);
-  if (!cartContext) return null;
-
-  const { cart, clearCart, totalPrice } = cartContext;
-
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const validateEmail = (email: string) =>
-    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(email);
+  const cartContext = useContext(CartContext);
+
+  // Early return is fine here because hooks are already declared above
+  if (!cartContext) return null;
+
+  const { cart, clearCart, totalPrice } = cartContext;
+
+  const validateEmail = (emailStr: string) =>
+    /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(emailStr);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,7 +52,7 @@ export default function ContactForm() {
       toast.success("Booking saved successfully!", {
         autoClose: 4000,
       });
-    } catch (error) {
+    } catch {
       toast.error("Something went wrong. Please try again.", {
         autoClose: 4000,
       });

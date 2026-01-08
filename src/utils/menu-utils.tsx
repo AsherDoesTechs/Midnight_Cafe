@@ -8,17 +8,35 @@ export interface MenuItem {
   category: string;
   price: number;
   image?: string;
-  diet_tags: string[]; // Standardized name
+  diet_tags: string[];
   status: "available" | "archived" | "coming-soon" | "out-of-stock";
   created_at?: string;
 }
+
+// --- EXPORT OPTION ARRAYS ---
+export const categoryOptions = ["coffee", "tea", "pastry", "sandwich"];
+
+export const dietOptions = [
+  "vegan",
+  "dairy",
+  "vegetarian",
+  "gluten-free",
+  "dairy-free",
+];
+
+export const statusOptions = [
+  { value: "available", label: "Available" },
+  { value: "coming-soon", label: "Coming Soon" },
+  { value: "out-of-stock", label: "Out of Stock" },
+  { value: "archived", label: "Archived" },
+];
 
 // --- COMPONENT: StatusBadge ---
 interface StatusBadgeProps {
   status: MenuItem["status"];
 }
 
-export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
+const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   let label = "";
   let classes = "";
 
@@ -53,21 +71,4 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   );
 };
 
-// --- EXPORT OPTION ARRAYS ---
-// Note: Ensure these match your DB category names exactly (case-sensitive)
-export const categoryOptions = ["coffee", "tea", "pastry", "sandwich"];
-
-export const dietOptions = [
-  "vegan",
-  "dairy",
-  "vegetarian",
-  "gluten-free",
-  "dairy-free",
-];
-
-export const statusOptions = [
-  { value: "available", label: "Available" },
-  { value: "coming-soon", label: "Coming Soon" },
-  { value: "out-of-stock", label: "Out of Stock" }, // Matches DB dash format
-  { value: "archived", label: "Archived" },
-];
+export { StatusBadge };

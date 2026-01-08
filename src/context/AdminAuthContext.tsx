@@ -15,16 +15,16 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({
 }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
-
   useEffect(() => {
+    const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
     const token = localStorage.getItem("adminToken") || adminToken;
+
     if (token) {
       setIsAuthenticated(true);
-    } else {
-      window.location.href = "/admin-login";
     }
-  }, [adminToken]);
+    // Note: Do not redirect to /admin-login here.
+    // Handle redirection in your ProtectedRoute or App router logic instead.
+  }, []);
 
   const logout = () => {
     localStorage.removeItem("adminToken");
@@ -39,7 +39,6 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({
   );
 };
 
-// Custom hook
 export const useAdminAuth = (): AdminAuthContextType => {
   const context = useContext(AdminAuthContext);
   if (!context) {

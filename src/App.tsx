@@ -52,6 +52,7 @@ function AppContent() {
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/contact" element={<ContactPage />} />
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/admin/authorize" element={<AdminAuthorize />} />
 
           {/* Protected Routes */}
           <Route

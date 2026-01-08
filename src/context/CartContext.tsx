@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { supabase } from "../libs/supabaseClient";
 
 export interface CartItem {
-  id: string; // DB row id (uuid)
+  id: string;
   menu_item_id: number;
   name: string;
   price: number;
@@ -18,6 +18,15 @@ interface CartContextType {
   totalPrice: () => number;
 }
 
+// Internal interface for DB mapping
+interface DBCartItem {
+  id: string;
+  menu_item_id: number;
+  name: string;
+  price: string | number;
+  quantity: number;
+}
+
 export const CartContext = createContext<CartContextType | undefined>(
   undefined
 );
@@ -25,7 +34,6 @@ export const CartContext = createContext<CartContextType | undefined>(
 export const CartProvider = ({ children }: { children: ReactNode }) => {
   const [cart, setCart] = useState<CartItem[]>([]);
 
-  // 🔐 Load cart when auth state is ready
   useEffect(() => {
     const loadCart = async (userId: string) => {
       const { data, error } = await supabase
@@ -35,7 +43,7 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
 
       if (!error && data) {
         setCart(
-          data.map((d: any) => ({
+          (data as DBCartItem[]).map((d) => ({
             id: d.id,
             menu_item_id: d.menu_item_id,
             name: d.name,
@@ -61,14 +69,12 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
-  // ➕ Add or update cart item
   const addToCart = async (item: Omit<CartItem, "id">) => {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
     if (!user) return;
 
     const existing = cart.find((i) => i.menu_item_id === item.menu_item_id);
-
     const quantity = existing
       ? existing.quantity + item.quantity
       : item.quantity;
@@ -94,7 +100,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
         const filtered = prev.filter(
           (i) => i.menu_item_id !== item.menu_item_id
         );
-
         return [
           ...filtered,
           {
@@ -109,7 +114,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // ➖ Remove item
   const removeFromCart = async (menu_item_id: number) => {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;
@@ -126,7 +130,6 @@ export const CartProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  // 🧹 Clear entire cart
   const clearCart = async () => {
     const { data: userData } = await supabase.auth.getUser();
     const user = userData?.user;

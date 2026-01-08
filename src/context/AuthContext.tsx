@@ -1,4 +1,3 @@
-// src/context/AuthContext.tsx
 import React, {
   createContext,
   useContext,
@@ -7,7 +6,6 @@ import React, {
   useCallback,
 } from "react";
 import { supabase } from "../libs/supabaseClient";
-import { type User as SupabaseUser } from "@supabase/supabase-js";
 
 interface User {
   id: string;
@@ -31,21 +29,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 🔹 Map Supabase user → App user
-  const mapUser = useCallback((sbUser: SupabaseUser | null): User | null => {
+  const mapUser = useCallback((sbUser: any): User | null => {
     if (!sbUser) return null;
 
     return {
       id: sbUser.id,
       email: sbUser.email ?? undefined,
-      role: (sbUser.user_metadata?.role as string) ?? "guest", // default role
+      role: (sbUser.user_metadata?.role as string) ?? "guest",
       displayName:
         (sbUser.user_metadata?.displayName as string) ??
         sbUser.email?.split("@")[0],
     };
   }, []);
 
-  // 🔹 Load initial session
   useEffect(() => {
     const loadSession = async () => {
       const { data } = await supabase.auth.getSession();
@@ -55,7 +51,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
     loadSession();
 
-    // 🔹 Listen for auth changes (login / logout / refresh)
     const { data: listener } = supabase.auth.onAuthStateChange(
       (_event, session) => {
         setUser(mapUser(session?.user ?? null));
@@ -67,13 +62,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     };
   }, [mapUser]);
 
-  // 🔹 Logout
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
   }, []);
 
-  // 🔹 Update user locally (UI-only)
   const updateUser = useCallback((newUserData: Partial<User>) => {
     setUser((prev) => (prev ? { ...prev, ...newUserData } : prev));
   }, []);
