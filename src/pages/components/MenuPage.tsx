@@ -134,7 +134,8 @@ const MenuCard: React.FC<MenuCardProps> = ({
         </p>
 
         <div className="flex flex-wrap gap-2 mb-4">
-          {item.diet.map((tag) => (
+          {/* The ?. prevents the crash if diet is undefined or null */}
+          {item.diet?.map((tag) => (
             <span
               key={tag}
               className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-blue-900/30 text-blue-300 border border-blue-800/50"

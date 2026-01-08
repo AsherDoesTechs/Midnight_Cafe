@@ -13,7 +13,7 @@ export default function LogoutButton() {
       onClick={handleLogout}
       className="py-2 px-4 bg-[#F1A7C5] text-[#121212] rounded-lg font-semibold hover:bg-[#f3b3cd] transition-all"
     >
-      Logoitss
+      Logout
     </button>
   );
 }

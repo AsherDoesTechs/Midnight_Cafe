@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
 import * as React from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import {
   Clock,
   CheckCircle,
@@ -7,515 +7,439 @@ import {
   BookOpen,
   Utensils,
   Zap,
-  XCircle,
   List,
-  Calendar,
-  X,
+  Search,
+  Timer,
+  AlertCircle,
+  Loader,
+  XCircle,
+  RefreshCcw,
 } from "lucide-react";
 import { toast } from "react-toastify";
-import { supabase } from "../libs/supabaseClient"; // Adjust path
+import { supabase } from "../libs/supabaseClient";
 
-// --- INTERFACES ---
+/* ===================== TYPES ===================== */
 interface FoodItem {
   name: string;
   quantity: number;
   price: number;
 }
-
 interface BookingDetails {
   space_name: string;
   duration_hours: number;
   notes: string;
+  student_id?: string;
+  customer_name?: string;
 }
+
+type GrantStatus =
+  | "Pending"
+  | "Confirmed"
+  | "Granted"
+  | "Expired"
+  | "Cancelled";
+type OrderStatus = "Pending" | "Preparing" | "Completed" | "Cancelled";
 
 interface Order {
   id: number;
   order_id: number | null;
-  booking_id: number | null;
-  customer_name: string;
-  student_id: string;
+  booking_id: string | null;
   total_amount: number;
   type: "Food" | "Booking" | "Combined";
-  food_items?: FoodItem[];
+  status: OrderStatus;
+  payment_status: string;
+  grant_status?: GrantStatus | null;
+  food_items?: FoodItem[] | null;
   booking_details?: BookingDetails | null;
-  status: "Pending" | "Preparing" | "Completed" | "Cancelled" | "N/A" | string;
-  grant_status:
-    | "Pending"
-    | "Granted"
-    | "Expired"
-    | "Confirmed"
-    | "N/A"
-    | string;
-  actual_start_time: string | null;
-  scheduled_end_time: string | null;
+  actual_start_time?: string | null;
+  scheduled_end_time?: string | null;
   order_date: string;
 }
 
-// --- HELPERS ---
-const formatTime = (seconds: number) => {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  return [h, m, s].map((v) => v.toString().padStart(2, "0")).join(":");
-};
+/* ===================== SUB-COMPONENTS ===================== */
+const KPICard = ({ title, value, icon: Icon, color, subValue }: any) => (
+  <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm flex items-center justify-between">
+    <div className="flex items-center gap-4">
+      <div className={`p-3 rounded-lg ${color} text-white`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-sm text-neutral-500 font-medium">{title}</p>
+        <p className="text-2xl font-bold text-neutral-800">{value}</p>
+        {subValue && (
+          <p className="text-xs text-neutral-400 mt-1">{subValue}</p>
+        )}
+      </div>
+    </div>
+  </div>
+);
 
+/* ===================== MAIN COMPONENT ===================== */
 const OrderManagement: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [timeRemaining, setTimeRemaining] = useState<{ [key: number]: number }>(
+  const [loading, setLoading] = useState(true);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [timeRemaining, setTimeRemaining] = useState<Record<number, number>>(
     {}
   );
-  const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
 
-  // --- FETCH ORDERS ---
-  const fetchOrders = async () => {
-    setLoading(true);
+  const formatTime = (seconds: number) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h > 0 ? h + "h " : ""}${m}m ${s}s`;
+  };
+
+  const fetchOrders = useCallback(async () => {
     try {
       const { data, error } = await supabase
-        .from<Order>("orders")
-        .select(
-          `
-          id,
-          order_id,
-          booking_id,
-          customer_name,
-          student_id,
-          total_amount,
-          type,
-          food_items,
-          booking_details,
-          status,
-          grant_status,
-          actual_start_time,
-          scheduled_end_time,
-          order_date
-        `
-        )
+        .from("combined_orders")
+        .select("*")
         .order("order_date", { ascending: false });
 
       if (error) throw error;
-
-      setOrders(data ?? []);
-    } catch (error: any) {
-      console.error("Error fetching orders:", error.message);
-      toast.error("Could not load orders from Supabase.");
-      setOrders([]);
+      setOrders((data as unknown as Order[]) ?? []);
+    } catch (err: any) {
+      toast.error("Sync Error");
     } finally {
       setLoading(false);
     }
-  };
-
-  // --- TIMER EFFECT ---
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const updatedRemaining: { [key: number]: number } = {};
-      let expiredOrderFound = false;
-
-      const updatedOrders = orders.map((order) => {
-        if (
-          order.booking_id &&
-          order.grant_status === "Granted" &&
-          order.scheduled_end_time
-        ) {
-          const endTime = new Date(order.scheduled_end_time).getTime();
-          const remainingSeconds = Math.max(
-            0,
-            Math.floor((endTime - now) / 1000)
-          );
-          updatedRemaining[order.id] = remainingSeconds;
-
-          if (remainingSeconds === 0 && order.grant_status !== "Expired") {
-            expiredOrderFound = true;
-            return { ...order, grant_status: "Expired", status: "Completed" };
-          }
-        }
-        return order;
-      });
-
-      setTimeRemaining(updatedRemaining);
-
-      if (expiredOrderFound) {
-        setOrders(updatedOrders);
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [orders]);
-
-  useEffect(() => {
-    fetchOrders();
-    const refreshInterval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(refreshInterval);
   }, []);
 
-  // --- ACTIONS ---
-  const updateOrderStatus = async (id: number, newStatus: string) => {
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: newStatus })
-        .eq("id", id);
+  /* 1. REAL-TIME & TIMERS */
+  useEffect(() => {
+    fetchOrders();
+    const channel = supabase
+      .channel("order_monitor")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "combined_orders" },
+        () => fetchOrders()
+      )
+      .subscribe();
 
-      if (error) throw error;
+    const timer = setInterval(() => {
+      const now = Date.now();
+      const updated: Record<number, number> = {};
+      orders.forEach((order) => {
+        if (order.grant_status === "Granted" && order.scheduled_end_time) {
+          const end = new Date(order.scheduled_end_time).getTime();
+          updated[order.id] = Math.max(0, Math.floor((end - now) / 1000));
+        }
+      });
+      setTimeRemaining(updated);
+    }, 1000);
 
-      toast.info(`Order #${id} status changed to ${newStatus}`);
-      fetchOrders();
-    } catch (error: any) {
-      console.error(error.message);
-      toast.error("Failed to update order status.");
-    }
+    return () => {
+      supabase.removeChannel(channel);
+      clearInterval(timer);
+    };
+  }, [orders, fetchOrders]);
+
+  /* 2. ANALYTICS MEMO */
+  const stats = useMemo(
+    () => ({
+      activeSessions: orders.filter((o) => o.grant_status === "Granted").length,
+      pendingFood: orders.filter(
+        (o) => o.type !== "Booking" && o.status === "Pending"
+      ).length,
+      totalToday: orders.length,
+    }),
+    [orders]
+  );
+
+  /* 3. PERMISSION ACTIONS */
+  const handleGrantAccess = async (id: number) => {
+    const { error } = await supabase
+      .from("combined_orders")
+      .update({
+        grant_status: "Granted",
+        actual_start_time: new Date().toISOString(),
+      })
+      .eq("id", id);
+    if (!error) toast.success("Access Granted & Timer Started");
   };
 
-  const handleGrantAccess = async (id: number) => {
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({
-          grant_status: "Granted",
-          actual_start_time: new Date().toISOString(),
-        })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.success(`Access granted for booking #${id}`);
-      fetchOrders();
-    } catch (error: any) {
-      toast.error("Failed to grant access.");
-    }
+  const updateOrderStatus = async (id: number, status: OrderStatus) => {
+    const { error } = await supabase
+      .from("combined_orders")
+      .update({ status })
+      .eq("id", id);
+    if (!error) toast.info(`Order moved to ${status}`);
   };
 
   const handleEndSession = async (id: number) => {
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ grant_status: "Expired", status: "Completed" })
-        .eq("id", id);
-
-      if (error) throw error;
-
-      toast.warning(`Booking #${id} session ended`);
-      fetchOrders();
-    } catch (error: any) {
-      toast.error("Failed to end session.");
-    }
+    const { error } = await supabase
+      .from("combined_orders")
+      .update({ grant_status: "Expired", status: "Completed" })
+      .eq("id", id);
+    if (!error) toast.warning("Session Terminated");
   };
 
-  const handleCancelOrder = async (id: number) => {
-    if (!window.confirm(`Cancel Order #${id}?`)) return;
+  if (loading)
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <Loader className="animate-spin text-indigo-600 mb-4" size={40} />
+        <p className="text-neutral-500 font-medium">Syncing order status...</p>
+      </div>
+    );
 
-    try {
-      const { error } = await supabase
-        .from("orders")
-        .update({ status: "Cancelled", grant_status: "Cancelled" })
-        .eq("id", id);
+  return (
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+        <div>
+          <h2 className="text-3xl font-extrabold text-neutral-900 tracking-tight">
+            F&B and Space Control
+          </h2>
+          <p className="text-neutral-500 font-medium italic text-sm flex items-center gap-2">
+            <Zap size={14} className="text-amber-500 fill-amber-500" /> Managing
+            permissions and kitchen queue
+          </p>
+        </div>
 
-      if (error) throw error;
-
-      toast.error(`Order #${id} cancelled`);
-      fetchOrders();
-    } catch (error: any) {
-      toast.error("Failed to cancel order.");
-    }
-  };
-
-  // --- HELPERS ---
-  const toggleDetails = (id: number) =>
-    setExpandedId(expandedId === id ? null : id);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Pending":
-      case "Confirmed":
-        return "bg-yellow-200 text-yellow-700 border-yellow-300";
-      case "Preparing":
-      case "Granted":
-        return "bg-blue-200 text-blue-700 border-blue-300";
-      case "Completed":
-        return "bg-green-200 text-green-700 border-green-300";
-      case "Expired":
-      case "Cancelled":
-        return "bg-red-200 text-red-700 border-red-300";
-      default:
-        return "bg-neutral-200 text-neutral-700 border-neutral-300";
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "Food":
-        return <Utensils size={16} className="text-pink-600" />;
-      case "Booking":
-        return <BookOpen size={16} className="text-indigo-600" />;
-      case "Combined":
-        return <CheckCircle size={16} className="text-green-600" />;
-      default:
-        return <></>;
-    }
-  };
-
-  const renderBookingActions = (order: Order) => {
-    if (!order.booking_id) return null;
-
-    switch (order.grant_status) {
-      case "Pending":
-      case "Confirmed":
-        return (
-          <div className="flex flex-col gap-1 items-start">
-            <button
-              onClick={() => handleGrantAccess(order.id)}
-              className="bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 hover:bg-indigo-700"
-            >
-              <Zap size={16} /> Grant Access
-            </button>
-            <button
-              onClick={() => handleCancelOrder(order.id)}
-              className="text-red-600 underline text-xs mt-1 flex items-center gap-1 hover:text-red-800"
-            >
-              <X size={14} /> Decline Booking
-            </button>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border p-1.5 rounded-xl shadow-sm">
+            <Search size={16} className="text-neutral-400 ml-2" />
+            <input
+              placeholder="Search ID or Customer..."
+              className="text-sm font-medium outline-none bg-transparent w-48"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        );
-
-      case "Granted":
-        const remaining = timeRemaining[order.id] ?? -1;
-        return (
-          <div className="flex flex-col items-start gap-1">
-            <span className="text-lg font-bold text-blue-600">
-              {formatTime(remaining)}
-            </span>
-            <button
-              onClick={() => handleEndSession(order.id)}
-              className="text-red-600 underline text-xs flex items-center gap-1 hover:text-red-800"
-            >
-              <XCircle size={14} /> End Session
-            </button>
-          </div>
-        );
-
-      case "Expired":
-      case "Cancelled":
-        return (
-          <span className="text-red-500 italic text-sm">
-            {order.grant_status === "Expired"
-              ? "Time Expired"
-              : "Declined/Cancelled"}
-          </span>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  const renderFoodActions = (order: Order) => {
-    if (
-      !order.order_id ||
-      order.status === "Completed" ||
-      order.status === "Cancelled" ||
-      order.status === "N/A"
-    )
-      return <span className="text-neutral-500 italic text-sm">N/A</span>;
-
-    if (order.status === "Pending") {
-      return (
-        <div className="flex flex-col gap-1 items-start">
           <button
-            onClick={() => updateOrderStatus(order.id, "Preparing")}
-            className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 hover:bg-blue-700"
+            onClick={fetchOrders}
+            className="p-2 bg-white border rounded-xl hover:bg-neutral-50 transition shadow-sm"
           >
-            <Clock size={16} /> Start Prep
-          </button>
-          <button
-            onClick={() => handleCancelOrder(order.id)}
-            className="text-red-600 underline text-xs mt-1 flex items-center gap-1 hover:text-red-800"
-          >
-            <X size={14} /> Cancel Order
+            <RefreshCcw size={18} className="text-neutral-400" />
           </button>
         </div>
-      );
-    } else if (order.status === "Preparing") {
-      return (
-        <button
-          onClick={() => updateOrderStatus(order.id, "Completed")}
-          className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-sm flex items-center gap-1 hover:bg-green-700"
-        >
-          <CheckCircle size={16} /> Complete
-        </button>
-      );
-    }
-  };
-
-  const renderDetailRow = (order: Order) => {
-    if (expandedId !== order.id) return null;
-
-    return (
-      <tr className="bg-neutral-50 border-t border-indigo-200">
-        <td colSpan={7} className="p-4 text-sm">
-          <div className="flex flex-wrap gap-8">
-            {(order.food_items ?? []).length > 0 && (
-              <div className="flex-1 min-w-[250px]">
-                <h4 className="font-bold text-lg text-pink-700 flex items-center gap-1 mb-2">
-                  <Utensils size={18} /> Food Items ({order.order_id ?? "N/A"})
-                </h4>
-                <ul className="list-disc list-inside space-y-1">
-                  {(order.food_items ?? []).map((item, idx) => (
-                    <li key={idx} className="text-neutral-700">
-                      <strong>{item.quantity}x</strong> {item.name} (₱
-                      {item.price.toFixed(2)})
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {order.booking_details && (
-              <div className="flex-1 min-w-[250px]">
-                <h4 className="font-bold text-lg text-indigo-700 flex items-center gap-1 mb-2">
-                  <Calendar size={18} /> Booking Details (
-                  {order.booking_id ?? "N/A"})
-                </h4>
-                <p className="text-neutral-700">
-                  <strong>Space:</strong>{" "}
-                  {order.booking_details?.space_name ?? "N/A"}
-                </p>
-                <p className="text-neutral-700">
-                  <strong>Duration:</strong>{" "}
-                  {order.booking_details?.duration_hours ?? "N/A"} hours
-                </p>
-                <p className="text-neutral-700 mt-2">
-                  <strong>Notes:</strong>{" "}
-                  <span className="italic">
-                    {order.booking_details?.notes ?? "N/A"}
-                  </span>
-                </p>
-              </div>
-            )}
-          </div>
-        </td>
-      </tr>
-    );
-  };
-
-  // --- RENDER ---
-  return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6 text-neutral-800 flex items-center gap-2">
-        <Users size={32} className="text-indigo-600" /> Order & Booking
-        Management
-      </h2>
-
-      <div className="mb-6 p-4 bg-indigo-50 border border-indigo-200 rounded-lg text-sm text-indigo-800">
-        <span className="font-bold">Booking Control:</span> Grant Access starts
-        the timer. Timer hitting zero automatically sets status to Expired.
-        Decline/Cancel is available.
       </div>
 
-      <div className="rounded-xl border bg-white shadow-xl overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-neutral-100 border-b text-neutral-600">
-            <tr>
-              <th className="p-3 text-left">ID/Time</th>
-              <th className="p-3 text-left">Type</th>
-              <th className="p-3 text-left">Customer (ID)</th>
-              <th className="p-3 text-left">Total</th>
-              <th className="p-3 text-left">Food Status</th>
-              <th className="p-3 text-left">Booking Status / Control</th>
-              <th className="p-3 text-left w-[80px]">Details</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={7} className="text-center p-6 text-neutral-500">
-                  Loading orders...
-                </td>
+      {/* KPI SECTION */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Live Sessions"
+          value={stats.activeSessions}
+          icon={Timer}
+          color="bg-indigo-600"
+          subValue="Access Granted"
+        />
+        <KPICard
+          title="Kitchen Queue"
+          value={stats.pendingFood}
+          icon={Utensils}
+          color="bg-orange-500"
+          subValue="Unstarted Orders"
+        />
+        <KPICard
+          title="Total Orders"
+          value={stats.totalToday}
+          icon={Users}
+          color="bg-emerald-500"
+          subValue="Aggregated Data"
+        />
+      </div>
+
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-neutral-50 bg-neutral-50/30">
+          <h3 className="font-bold text-neutral-800">Operational Log</h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-neutral-50/50 text-neutral-400 text-[11px] uppercase tracking-wider font-bold">
+                <th className="px-8 py-4">Ref ID</th>
+                <th className="px-8 py-4">Category</th>
+                <th className="px-8 py-4">Payment</th>
+                <th className="px-8 py-4">Kitchen Action</th>
+                <th className="px-8 py-4">Space Access</th>
+                <th className="px-8 py-4 text-center">Info</th>
               </tr>
-            ) : orders.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-center p-6 text-neutral-500">
-                  No orders or bookings available.
-                </td>
-              </tr>
-            ) : (
-              orders.map((order) => (
-                <React.Fragment key={order.id}>
-                  <tr className="border-b hover:bg-neutral-50 transition">
-                    <td className="p-3 font-semibold text-sm">
-                      <span className="text-neutral-900 block">
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {orders
+                .filter((o) => o.id.toString().includes(searchTerm))
+                .map((order) => (
+                  <React.Fragment key={order.id}>
+                    <tr className="hover:bg-neutral-50/50 transition-colors">
+                      <td className="px-8 py-5 text-sm font-bold text-neutral-700">
                         #{order.id}
-                      </span>
-                      <span className="text-xs text-neutral-500">
-                        {new Date(order.order_date).toLocaleTimeString(
-                          "en-US",
-                          {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                            hour12: true,
-                          }
-                        )}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-xs font-semibold flex items-center gap-1 ${
-                          order.type === "Food"
-                            ? "bg-pink-100 text-pink-700"
-                            : order.type === "Booking"
-                            ? "bg-indigo-100 text-indigo-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {getTypeIcon(order.type)} {order.type}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <span className="font-medium block">
-                        {order.customer_name}
-                      </span>
-                      <span className="text-xs text-neutral-500">
-                        ({order.student_id})
-                      </span>
-                    </td>
-                    <td className="p-3 font-bold text-neutral-700">
-                      ₱{order.total_amount.toFixed(2)}
-                    </td>
-                    <td className="p-3">{renderFoodActions(order)}</td>
-                    <td className="p-3">{renderBookingActions(order)}</td>
-                    <td className="p-3 text-center">
-                      {(order.food_items?.length ?? 0) > 0 ||
-                      order.booking_details ? (
-                        <button
-                          onClick={() => toggleDetails(order.id)}
-                          className="text-indigo-600 hover:text-indigo-800 transition p-2 rounded-full hover:bg-indigo-100"
-                          title={
-                            expandedId === order.id
-                              ? "Hide Details"
-                              : "Show Details"
-                          }
+                      </td>
+                      <td className="px-8 py-5">
+                        <div className="flex items-center gap-2 text-xs font-bold text-neutral-500 uppercase tracking-tight">
+                          {order.type === "Food" ? (
+                            <Utensils size={14} className="text-orange-500" />
+                          ) : (
+                            <BookOpen size={14} className="text-indigo-500" />
+                          )}
+                          {order.type}
+                        </div>
+                      </td>
+                      <td className="px-8 py-5">
+                        <span
+                          className={`px-2 py-1 rounded-full text-[10px] font-bold border uppercase ${
+                            order.payment_status === "paid"
+                              ? "bg-emerald-50 text-emerald-600 border-emerald-100"
+                              : "bg-red-50 text-red-600 border-red-100"
+                          }`}
                         >
-                          <List
-                            size={20}
-                            className={
-                              expandedId === order.id
-                                ? "rotate-180 transform transition"
-                                : "transition"
-                            }
-                          />
-                        </button>
-                      ) : (
-                        <span className="text-neutral-400 italic text-xs">
-                          No Info
+                          {order.payment_status}
                         </span>
-                      )}
-                    </td>
-                  </tr>
-                  {renderDetailRow(order)}
-                </React.Fragment>
-              ))
-            )}
-          </tbody>
-        </table>
+                      </td>
+                      <td className="px-8 py-5">
+                        {order.type !== "Booking" && (
+                          <div className="flex gap-2">
+                            {order.status === "Pending" && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "Preparing")
+                                }
+                                className="bg-orange-500 text-white p-1.5 rounded-lg hover:bg-orange-600 transition shadow-sm"
+                              >
+                                <Clock size={14} />
+                              </button>
+                            )}
+                            {order.status === "Preparing" && (
+                              <button
+                                onClick={() =>
+                                  updateOrderStatus(order.id, "Completed")
+                                }
+                                className="bg-emerald-500 text-white p-1.5 rounded-lg hover:bg-emerald-600 transition shadow-sm"
+                              >
+                                <CheckCircle size={14} />
+                              </button>
+                            )}
+                            <span className="text-xs font-bold text-neutral-400 mt-1.5 ml-1">
+                              {order.status}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-8 py-5">
+                        {order.booking_id && (
+                          <div className="flex flex-col gap-1">
+                            {order.grant_status === "Granted" ? (
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-black text-indigo-600 tabular-nums">
+                                  {formatTime(timeRemaining[order.id] ?? 0)}
+                                </span>
+                                <button
+                                  onClick={() => handleEndSession(order.id)}
+                                  className="text-[10px] text-red-500 font-bold underline hover:text-red-700 transition"
+                                >
+                                  Kill Session
+                                </button>
+                              </div>
+                            ) : ["Pending", "Confirmed"].includes(
+                                order.grant_status!
+                              ) ? (
+                              <button
+                                onClick={() => handleGrantAccess(order.id)}
+                                className="flex items-center gap-1.5 bg-indigo-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition"
+                              >
+                                <Zap size={12} fill="white" /> Grant Access
+                              </button>
+                            ) : (
+                              <span className="text-xs font-bold text-neutral-300 italic">
+                                {order.grant_status}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-8 py-5 text-center">
+                        <button
+                          onClick={() =>
+                            setExpandedId(
+                              expandedId === order.id ? null : order.id
+                            )
+                          }
+                          className={`p-2 rounded-lg transition-all ${
+                            expandedId === order.id
+                              ? "bg-neutral-100 text-indigo-600 shadow-inner"
+                              : "text-neutral-300 hover:text-neutral-500"
+                          }`}
+                        >
+                          <List size={18} />
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedId === order.id && (
+                      <tr className="bg-neutral-50/50">
+                        <td colSpan={6} className="px-8 py-6">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {order.food_items && (
+                              <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm">
+                                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                  <Utensils size={12} /> Kitchen Requirements
+                                </p>
+                                {order.food_items.map((item, i) => (
+                                  <div
+                                    key={i}
+                                    className="flex justify-between items-center py-2 border-b border-neutral-50 last:border-0"
+                                  >
+                                    <span className="text-sm font-bold text-neutral-700">
+                                      {item.quantity}x {item.name}
+                                    </span>
+                                    <span className="text-sm text-neutral-400 font-medium">
+                                      ₱{item.price}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {order.booking_details && (
+                              <div className="bg-white p-4 rounded-xl border border-neutral-100 shadow-sm">
+                                <p className="text-[10px] font-black text-neutral-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+                                  <BookOpen size={12} /> Space Allocation
+                                </p>
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-neutral-400">
+                                      Target Area:
+                                    </span>{" "}
+                                    <span className="font-bold text-neutral-700">
+                                      {order.booking_details.space_name}
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-neutral-400">
+                                      Duration:
+                                    </span>{" "}
+                                    <span className="font-bold text-neutral-700">
+                                      {order.booking_details.duration_hours}{" "}
+                                      Hours
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-neutral-400">
+                                      Customer:
+                                    </span>{" "}
+                                    <span className="font-bold text-neutral-700">
+                                      {order.booking_details.customer_name}
+                                    </span>
+                                  </div>
+                                  {order.booking_details.notes && (
+                                    <div className="mt-3 p-3 bg-amber-50 text-amber-700 text-xs rounded-lg border border-amber-100 italic">
+                                      "{order.booking_details.notes}"
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );

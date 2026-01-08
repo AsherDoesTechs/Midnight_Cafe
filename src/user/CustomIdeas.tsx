@@ -31,7 +31,10 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
     setIsSubmitting(true);
 
     try {
-      const user = supabase.auth.user();
+      // FIX: Use getUser() instead of user()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
       const { error } = await supabase.from("custom_ideas").insert([
@@ -131,7 +134,10 @@ const CustomIdeas: React.FC = () => {
   const fetchIdeas = useCallback(async () => {
     setLoading(true);
     try {
-      const user = supabase.auth.user();
+      // FIX: Use getUser() instead of user()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setIdeas([]);
         setLoading(false);
@@ -168,14 +174,14 @@ const CustomIdeas: React.FC = () => {
   }, [fetchIdeas]);
 
   const handleAction = async (id: number, action: "submit" | "delete") => {
-    const user = supabase.auth.user();
+    // FIX: Use getUser()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) return;
 
     if (action === "submit") {
       try {
-        const ideaToUpdate = ideas.find((i) => i.id === id);
-        if (!ideaToUpdate) return;
-
         const { error } = await supabase
           .from("custom_ideas")
           .update({ status: "Submitted" })

@@ -40,10 +40,7 @@ const FavoriteCard: React.FC<FavoriteCardProps> = ({
   const isButtonDisabled = isAdding || quantity < 1;
 
   return (
-    <div
-      key={item.id}
-      className="bg-[#222] p-5 rounded-lg border border-[#333] shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:border-[#F1A7C5]"
-    >
+    <div className="bg-[#222] p-5 rounded-lg border border-[#333] shadow-lg flex flex-col md:flex-row justify-between items-start md:items-center transition-all hover:border-[#F1A7C5]">
       <div className="space-y-1 mb-3 md:mb-0">
         <p className="text-lg font-bold text-white">{item.name}</p>
         <div className="flex items-center text-sm text-gray-400 gap-4">
@@ -123,11 +120,13 @@ const Favorites: React.FC = () => {
     setTimeout(() => setToast((prev) => ({ ...prev, visible: false })), 3000);
   };
 
-  // Fetch favorites from Supabase
   const fetchFavorites = useCallback(async () => {
     setLoading(true);
     try {
-      const user = supabase.auth.user();
+      // FIX: Use getUser()
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setFavorites([]);
         setLoading(false);
@@ -165,7 +164,9 @@ const Favorites: React.FC = () => {
     setFavorites((prev) => prev.filter((i) => i.id !== itemToRemove.id));
 
     try {
-      const user = supabase.auth.user();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) throw new Error("User not authenticated");
 
       const { error } = await supabase
@@ -175,20 +176,26 @@ const Favorites: React.FC = () => {
         .eq("menu_item_id", itemToRemove.id);
 
       if (error) {
-        setFavorites((prev) => [...prev, itemToRemove]); // revert
+        setFavorites((prev) => [...prev, itemToRemove]);
         throw error;
       }
 
       showToast(`💔 Removed ${itemToRemove.name} from favorites.`);
     } catch (err) {
       console.error("Error removing favorite:", err);
-      fetchFavorites(); // ensure sync
+      fetchFavorites();
     }
   };
 
   const handleAddToCart = useCallback(
     (item: FavoriteItem, quantity: number) => {
-      addToCart({ id: item.id, name: item.name, price: item.price, quantity });
+      // FIX: Include menu_item_id to satisfy CartItem interface
+      addToCart({
+        menu_item_id: item.id,
+        name: item.name,
+        price: item.price,
+        quantity,
+      });
       showToast(`🛒 Added ${quantity}x ${item.name} to cart!`);
     },
     [addToCart]

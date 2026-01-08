@@ -1,5 +1,14 @@
-import { useState, useEffect } from "react";
-import { BarChart2, TrendingUp, Loader, AlertTriangle } from "lucide-react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  TrendingUp,
+  Loader,
+  AlertTriangle,
+  RotateCcw,
+  Download,
+  DollarSign,
+  ShoppingCart,
+  Calendar,
+} from "lucide-react";
 import {
   BarChart,
   Bar,
@@ -14,30 +23,77 @@ import {
 } from "recharts";
 import { supabase } from "../libs/supabaseClient";
 
+/* ===================== TYPES ===================== */
+
 interface AnalyticsData {
   month: string;
   revenue: number;
   sales: number;
 }
 
+interface KPIMetrics {
+  totalRevenue: number;
+  totalSales: number;
+  averageOrderValue: number;
+}
+
+/* ===================== SUB-COMPONENTS ===================== */
+
+const KPICard = ({ title, value, icon: Icon, color, subValue }: any) => (
+  <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm flex items-center justify-between">
+    <div className="flex items-center gap-4">
+      <div className={`p-3 rounded-lg ${color} text-white`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-sm text-neutral-500 font-medium">{title}</p>
+        <p className="text-2xl font-bold text-neutral-800">{value}</p>
+        {subValue && (
+          <p className="text-xs text-neutral-400 mt-1">{subValue}</p>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
 const RevenueBarChart = ({ data }: { data: AnalyticsData[] }) => (
   <ResponsiveContainer width="100%" height={300}>
-    <BarChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-      <XAxis dataKey="month" stroke="#555" />
+    <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+      <XAxis
+        dataKey="month"
+        axisLine={false}
+        tickLine={false}
+        fontSize={12}
+        tick={{ fill: "#9ca3af" }}
+      />
       <YAxis
-        stroke="#555"
-        tickFormatter={(value) => `₱${(value / 1000).toFixed(0)}k`}
+        axisLine={false}
+        tickLine={false}
+        fontSize={12}
+        tick={{ fill: "#9ca3af" }}
+        tickFormatter={(val) => `₱${(val / 1000).toFixed(0)}k`}
       />
       <Tooltip
-        cursor={{ fill: "rgba(0, 0, 0, 0.05)" }}
-        formatter={(value) => [`₱${value.toLocaleString()}`, "Revenue"]}
+        cursor={{ fill: "#f9fafb" }}
+        contentStyle={
+          {
+            borderRadius: "12px",
+            border: "none",
+            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+          } as React.CSSProperties
+        }
+        // FIX: Handled value as unknown/any to avoid TS18048 and forced numeric check
+        formatter={(value: any) => {
+          const numValue = typeof value === "number" ? value : 0;
+          return [`₱${numValue.toLocaleString()}`, "Revenue"];
+        }}
       />
       <Bar
         dataKey="revenue"
         fill="#4f46e5"
-        name="Monthly Revenue"
-        radius={[4, 4, 0, 0]}
+        radius={[6, 6, 0, 0]}
+        barSize={35}
       />
     </BarChart>
   </ResponsiveContainer>
@@ -45,44 +101,69 @@ const RevenueBarChart = ({ data }: { data: AnalyticsData[] }) => (
 
 const SalesLineChart = ({ data }: { data: AnalyticsData[] }) => (
   <ResponsiveContainer width="100%" height={300}>
-    <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-      <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-      <XAxis dataKey="month" stroke="#555" />
-      <YAxis stroke="#555" />
-      <Tooltip formatter={(value) => [value.toLocaleString(), "Sales Units"]} />
-      <Legend />
+    <LineChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+      <XAxis
+        dataKey="month"
+        axisLine={false}
+        tickLine={false}
+        fontSize={12}
+        tick={{ fill: "#9ca3af" }}
+      />
+      <YAxis
+        axisLine={false}
+        tickLine={false}
+        fontSize={12}
+        tick={{ fill: "#9ca3af" }}
+      />
+      <Tooltip
+        contentStyle={
+          {
+            borderRadius: "12px",
+            border: "none",
+            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+          } as React.CSSProperties
+        }
+        // FIX: Handled value as unknown/any to avoid TS18048
+        formatter={(value: any) => {
+          const numValue = typeof value === "number" ? value : 0;
+          return [numValue.toLocaleString(), "Orders"];
+        }}
+      />
+      <Legend verticalAlign="top" height={36} iconType="circle" />
       <Line
         type="monotone"
         dataKey="sales"
         stroke="#10b981"
-        strokeWidth={2}
-        dot={{ r: 4 }}
+        strokeWidth={4}
+        dot={{ r: 4, fill: "#10b981", strokeWidth: 2, stroke: "#fff" }}
         activeDot={{ r: 8 }}
-        name="Sales Units"
+        name="Orders"
       />
     </LineChart>
   </ResponsiveContainer>
 );
+
+/* ===================== MAIN COMPONENT ===================== */
 
 const SalesAnalytics = () => {
   const [salesData, setSalesData] = useState<AnalyticsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // --- Filter state ---
-  const [filterMonth, setFilterMonth] = useState<string>(""); // Format: "YYYY-MM"
-  const [filterYear, setFilterYear] = useState<string>(""); // Format: "YYYY"
+  const [filterMonth, setFilterMonth] = useState<string>("");
+  const [filterYear, setFilterYear] = useState<string>(
+    new Date().getFullYear().toString()
+  );
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       let query = supabase
-        .from("orders")
-        .select(`created_at, total_amount`)
-        .eq("status", "paid");
+        .from("combined_orders")
+        .select(`created_at, total_amount, status, payment_status`);
 
-      // Apply filtering
       if (filterMonth) {
         const start = new Date(filterMonth + "-01");
         const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
@@ -90,28 +171,35 @@ const SalesAnalytics = () => {
           .gte("created_at", start.toISOString())
           .lt("created_at", end.toISOString());
       } else if (filterYear) {
-        const start = new Date(`${filterYear}-01-01`);
-        const end = new Date(`${filterYear}-12-31T23:59:59`);
+        const start = new Date(`${filterYear}-01-01T00:00:00Z`);
+        const end = new Date(`${filterYear}-12-31T23:59:59Z`);
         query = query
           .gte("created_at", start.toISOString())
           .lte("created_at", end.toISOString());
       }
 
-      const { data, error } = await query;
+      const { data, error: fetchError } = await query;
+      if (fetchError) throw fetchError;
 
-      if (error) throw error;
-
-      // Aggregate monthly
       const monthlyMap: Record<string, { revenue: number; sales: number }> = {};
-      data?.forEach((order: any) => {
+
+      data?.forEach((order) => {
+        const isPaid = order.payment_status?.toLowerCase() === "paid";
+        const isCompleted = order.status?.toLowerCase() === "completed";
+
+        if (!isPaid && !isCompleted) return;
+
         const date = new Date(order.created_at);
-        const month = date.toLocaleString("default", {
+        const monthKey = date.toLocaleString("default", {
           month: "short",
           year: "numeric",
         });
-        if (!monthlyMap[month]) monthlyMap[month] = { revenue: 0, sales: 0 };
-        monthlyMap[month].revenue += order.total_amount;
-        monthlyMap[month].sales += 1;
+
+        if (!monthlyMap[monthKey])
+          monthlyMap[monthKey] = { revenue: 0, sales: 0 };
+
+        monthlyMap[monthKey].revenue += Number(order.total_amount || 0);
+        monthlyMap[monthKey].sales += 1;
       });
 
       const formattedData = Object.entries(monthlyMap)
@@ -126,152 +214,230 @@ const SalesAnalytics = () => {
 
       setSalesData(formattedData);
     } catch (e: any) {
-      console.error("Analytics fetching error:", e);
-      setError(
-        `Failed to load sales analytics: ${e.message}. Check Supabase connection.`
-      );
+      setError(e.message || "An unexpected error occurred");
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterMonth, filterYear]);
 
   useEffect(() => {
     fetchData();
-  }, [filterMonth, filterYear]);
+  }, [fetchData]);
+
+  const kpis = useMemo(() => {
+    const totalRevenue = salesData.reduce((acc, curr) => acc + curr.revenue, 0);
+    const totalSales = salesData.reduce((acc, curr) => acc + curr.sales, 0);
+    return {
+      totalRevenue,
+      totalSales,
+      averageOrderValue: totalSales > 0 ? totalRevenue / totalSales : 0,
+    };
+  }, [salesData]);
+
+  const exportCSV = () => {
+    const csvContent = [
+      ["Month", "Revenue", "Orders"],
+      ...salesData.map((d) => [d.month, d.revenue, d.sales]),
+    ]
+      .map((e) => e.join(","))
+      .join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `sales_report_${
+      new Date().toISOString().split("T")[0]
+    }.csv`;
+    link.click();
+  };
 
   if (loading)
     return (
-      <div className="flex flex-col items-center justify-center p-10 h-64 text-indigo-600 bg-white border rounded-xl shadow-lg">
-        <Loader size={32} className="animate-spin mb-3" />
-        <p className="text-lg font-medium">Loading Sales Analytics...</p>
+      <div className="flex flex-col items-center justify-center min-h-[400px]">
+        <Loader className="animate-spin text-indigo-600 mb-4" size={40} />
+        <p className="text-neutral-500 font-medium">
+          Analyzing combined orders...
+        </p>
       </div>
     );
 
   if (error)
     return (
-      <div className="py-8 text-center text-red-600 bg-red-50 border border-red-200 rounded-xl w-full flex flex-col items-center justify-center gap-3">
-        <AlertTriangle size={32} />
-        <p className="font-bold text-xl">Data Fetching Error</p>
-        <p className="font-medium max-w-lg text-sm">{error}</p>
+      <div className="p-8 text-center bg-red-50 border border-red-200 rounded-2xl">
+        <AlertTriangle className="mx-auto text-red-500 mb-4" size={48} />
+        <h3 className="text-lg font-bold text-red-800">Connection Error</h3>
+        <p className="text-red-600 mb-6">{error}</p>
+        <button
+          onClick={fetchData}
+          className="px-6 py-2 bg-red-600 text-white rounded-xl hover:bg-red-700 transition"
+        >
+          Retry Connection
+        </button>
       </div>
     );
 
   return (
-    <div>
-      <h2 className="text-3xl font-bold mb-6 text-neutral-800 flex items-center gap-2">
-        <BarChart2 size={28} />
-        Sales Analytics
-      </h2>
-
-      {/* --- FILTERS --- */}
-      <div className="flex gap-4 mb-6">
+    <div className="max-w-7xl mx-auto space-y-8">
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Filter by Month
-          </label>
-          <input
-            type="month"
-            value={filterMonth}
-            onChange={(e) => {
-              setFilterMonth(e.target.value);
-              setFilterYear(""); // reset year if month is selected
-            }}
-            className="p-2 border rounded-md"
-          />
+          <h2 className="text-3xl font-extrabold text-neutral-900 tracking-tight">
+            Sales Analytics
+          </h2>
+          <p className="text-neutral-500 font-medium">
+            Aggregated data from combined_orders
+          </p>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-neutral-700 mb-1">
-            Filter by Year
-          </label>
-          <input
-            type="number"
-            placeholder="YYYY"
-            value={filterYear}
-            onChange={(e) => {
-              setFilterYear(e.target.value);
-              setFilterMonth(""); // reset month if year is selected
-            }}
-            className="p-2 border rounded-md w-24"
-          />
-        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2 bg-white border p-1.5 rounded-xl shadow-sm">
+            <Calendar size={16} className="text-neutral-400 ml-2" />
+            <input
+              type="month"
+              className="text-sm font-medium outline-none bg-transparent mr-2"
+              value={filterMonth}
+              onChange={(e) => {
+                setFilterMonth(e.target.value);
+                setFilterYear("");
+              }}
+            />
+            <input
+              type="number"
+              placeholder="Year"
+              className="text-sm font-medium outline-none bg-transparent w-16 border-l pl-2"
+              value={filterYear}
+              onChange={(e) => {
+                setFilterYear(e.target.value);
+                setFilterMonth("");
+              }}
+            />
+          </div>
 
-        <button
-          onClick={() => {
-            setFilterMonth("");
-            setFilterYear("");
-          }}
-          className="px-3 py-2 bg-gray-300 rounded-md hover:bg-gray-400 transition"
-        >
-          Reset Filters
-        </button>
+          <button
+            onClick={exportCSV}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 shadow-lg shadow-indigo-200 transition"
+          >
+            <Download size={18} /> Export CSV
+          </button>
+
+          {(filterMonth ||
+            filterYear !== new Date().getFullYear().toString()) && (
+            <button
+              onClick={() => {
+                setFilterMonth("");
+                setFilterYear(new Date().getFullYear().toString());
+              }}
+              className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
+            >
+              <RotateCcw size={20} />
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* --- CHARTS --- */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-        <div className="p-4 bg-white border rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-4 text-neutral-800 flex items-center gap-2">
-            <BarChart2 size={20} className="text-indigo-600" />
-            Monthly Revenue
+      {/* KPIS */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <KPICard
+          title="Total Revenue"
+          value={`₱${kpis.totalRevenue.toLocaleString()}`}
+          icon={DollarSign}
+          color="bg-indigo-600"
+          subValue="Gross Earnings"
+        />
+        <KPICard
+          title="Total Orders"
+          value={kpis.totalSales}
+          icon={ShoppingCart}
+          color="bg-emerald-500"
+          subValue="Successful Sales"
+        />
+        <KPICard
+          title="Avg. Order Value"
+          value={`₱${kpis.averageOrderValue.toFixed(2)}`}
+          icon={TrendingUp}
+          color="bg-orange-500"
+          subValue="Per Order Average"
+        />
+      </div>
+
+      {/* CHARTS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-sm">
+          <h3 className="font-bold text-neutral-800 text-lg mb-6">
+            Revenue Growth
           </h3>
           <RevenueBarChart data={salesData} />
         </div>
 
-        <div className="p-4 bg-white border rounded-xl shadow-lg">
-          <h3 className="text-xl font-semibold mb-4 text-neutral-800 flex items-center gap-2">
-            <TrendingUp size={20} className="text-teal-600" />
-            Sales Units Volume
+        <div className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-sm">
+          <h3 className="font-bold text-neutral-800 text-lg mb-6">
+            Order Trends
           </h3>
           <SalesLineChart data={salesData} />
         </div>
       </div>
 
-      {/* --- TABLE --- */}
-      <div className="p-4 bg-white border rounded-xl shadow-lg">
-        <p className="text-lg font-medium mb-3 text-neutral-700">
-          Monthly Sales Volume and Revenue (Detailed Table)
-        </p>
-        <table className="min-w-full divide-y divide-neutral-200">
-          <thead className="bg-neutral-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                Month
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                Revenue (₱)
-              </th>
-              <th className="px-6 py-3 text-right text-xs font-medium text-neutral-500 uppercase tracking-wider">
-                Sales Units
-              </th>
-            </tr>
-          </thead>
-          <tbody className="bg-white divide-y divide-neutral-200">
-            {salesData.length > 0 ? (
-              salesData.map((data) => (
-                <tr key={data.month} className="hover:bg-neutral-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-neutral-900">
-                    {data.month}
+      {/* TABLE */}
+      <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-neutral-50 bg-neutral-50/30">
+          <h3 className="font-bold text-neutral-800">
+            Monthly Performance Breakdown
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="bg-neutral-50/50 text-neutral-400 text-[11px] uppercase tracking-wider font-bold">
+                <th className="px-8 py-4 tracking-widest">Reporting Month</th>
+                <th className="px-8 py-4 text-right tracking-widest">
+                  Total Revenue
+                </th>
+                <th className="px-8 py-4 text-right tracking-widest">
+                  Transactions
+                </th>
+                <th className="px-8 py-4 text-right tracking-widest">
+                  Avg Ticket
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-neutral-50">
+              {salesData.map((row) => (
+                <tr
+                  key={row.month}
+                  className="hover:bg-neutral-50/50 transition-colors"
+                >
+                  <td className="px-8 py-5 text-sm font-bold text-neutral-700">
+                    {row.month}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-neutral-700">
-                    ₱{data.revenue.toLocaleString()}
+                  <td className="px-8 py-5 text-sm text-right font-semibold text-indigo-600">
+                    ₱{row.revenue.toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-neutral-700">
-                    {data.sales.toLocaleString()}
+                  <td className="px-8 py-5 text-sm text-right text-neutral-600">
+                    {row.sales}
+                  </td>
+                  <td className="px-8 py-5 text-sm text-right">
+                    <span className="text-xs font-bold text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">
+                      ₱
+                      {row.sales > 0
+                        ? (row.revenue / row.sales).toFixed(0)
+                        : "0"}
+                    </span>
                   </td>
                 </tr>
-              ))
-            ) : (
-              <tr>
-                <td
-                  colSpan={3}
-                  className="px-6 py-4 text-center text-sm text-neutral-500"
-                >
-                  No paid sales data found for this filter.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+              ))}
+              {salesData.length === 0 && (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="px-8 py-20 text-center text-neutral-400 italic font-medium"
+                  >
+                    No matching sales records found for the selected filter.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
