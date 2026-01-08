@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import {
   Save,
   X,
@@ -36,25 +36,26 @@ const ImageUploadFormSection: React.FC<ImageUploadFormSectionProps> = ({
   onFormChange,
   onFileChange,
 }) => {
-  const [previewUrl, setPreviewUrl] = useState<string>("");
+  // DERIVED STATE: Calculate the preview URL directly during render.
+  // This avoids the "cascading render" error by not using setState inside an effect.
+  const previewUrl = imageFile
+    ? URL.createObjectURL(imageFile)
+    : item.image || "";
 
   const inputStyle =
     "border border-gray-300 rounded-lg px-3 py-2 w-full focus:outline-none focus:ring-2 focus:ring-indigo-500 transition duration-150 bg-white text-gray-800 shadow-sm";
   const labelStyle =
     "text-sm font-semibold text-gray-700 flex items-center gap-2 mb-1";
 
+  // CLEANUP: Revoke the object URL when the component unmounts or the file changes
+  // to prevent memory leaks.
   useEffect(() => {
-    let objectUrl = "";
-    if (imageFile) {
-      objectUrl = URL.createObjectURL(imageFile);
-      setPreviewUrl(objectUrl);
-    } else {
-      setPreviewUrl(item.image || "");
-    }
     return () => {
-      if (objectUrl) URL.revokeObjectURL(objectUrl);
+      if (previewUrl.startsWith("blob:")) {
+        URL.revokeObjectURL(previewUrl);
+      }
     };
-  }, [imageFile, item.image]);
+  }, [previewUrl]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -161,10 +162,12 @@ const EditMenuModal: React.FC<EditMenuModalProps> = ({
     if (parts.length > 2) value = `${parts[0]}.${parts[1]}`;
     if (parts[1]) value = `${parts[0]}.${parts[1].slice(0, 2)}`;
 
-    // Cast as any here to simulate the target object since onFormChange expects a real event
-    onFormChange({
+    // Correctly typed event object
+    const syntheticEvent = {
       target: { name: "price", value: value },
-    } as any);
+    } as React.ChangeEvent<HTMLInputElement>;
+
+    onFormChange(syntheticEvent);
   };
 
   const isSaveDisabled = isUploading || !item.name || !item.category;

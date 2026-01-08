@@ -18,7 +18,7 @@ interface Equipment {
 }
 
 interface FoodItem {
-  id: string; // ✅ add id
+  id: string;
   name: string;
   price: number;
   quantity: number;
@@ -31,6 +31,12 @@ interface BookingForm {
   durationHours: number;
   selectedEquipments: number[];
   notes?: string;
+}
+
+// Added interface for Supabase Booking response
+interface BookedSlotResponse {
+  start_time: string;
+  end_time: string;
 }
 
 export default function BookingPage() {
@@ -78,15 +84,19 @@ export default function BookingPage() {
 
       const { data, error } = await supabase
         .from("bookings")
-        .select("start_time,end_time")
+        .select("start_time, end_time")
         .eq("space_id", formData.selectedRoomType)
         .gte("start_time", startOfDay.toISOString())
         .lte("end_time", endOfDay.toISOString());
 
       if (error) return toast.error("Failed to fetch booked slots");
 
+      // FIX: Typed 'b' as BookedSlotResponse to replace 'any'
       setBookedSlots(
-        (data || []).map((b: any) => ({ start: b.start_time, end: b.end_time }))
+        ((data as unknown as BookedSlotResponse[]) || []).map((b) => ({
+          start: b.start_time,
+          end: b.end_time,
+        }))
       );
     };
 
@@ -186,8 +196,11 @@ export default function BookingPage() {
         notes: "",
       });
       setCart([]);
-    } catch (err: any) {
-      toast.error(err.message ?? "Booking failed.");
+    } catch (err) {
+      // FIX: Safe error handling without 'any'
+      const errorMessage =
+        err instanceof Error ? err.message : "Booking failed.";
+      toast.error(errorMessage);
       console.error(err);
     } finally {
       setIsSubmitting(false);

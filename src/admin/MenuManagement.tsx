@@ -1,11 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Plus, Loader2, Lock, ShieldCheck, QrCode } from "lucide-react";
 import { supabase } from ".././libs/supabaseClient";
 import MenuTable from "../admin/ComponentsAdmin/MenuTable";
 import EditMenuModal from "../admin/ComponentsAdmin/EditMenuModal";
 import { type MenuItem } from "../utils/menu-utils";
-import { authenticator } from "otplib"; // Import TOTP logic
-import { AdminSetup } from "./ComponentsAdmin/qrcode"; // Import your QR component
+import { authenticator } from "otplib";
+import { AdminSetup } from "./ComponentsAdmin/qrcode";
 
 export default function MenuManagement() {
   const [menu, setMenu] = useState<MenuItem[]>([]);
@@ -15,18 +15,17 @@ export default function MenuManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-
-  // Toggle for showing/hiding the QR code setup
   const [showSetup, setShowSetup] = useState(false);
 
-  // --- SESSION-BASED UNLOCK STATE ---
+  // --- SECURITY CONFIG ---
   const [lastAuthTime, setLastAuthTime] = useState<number | null>(null);
-  const SESSION_DURATION = 15 * 60 * 1000; // 15 Minutes
+  // Memoize duration so it's a stable dependency for the hook
+  const SESSION_DURATION = useMemo(() => 15 * 60 * 1000, []);
 
   const isSessionValid = useCallback(() => {
     if (!lastAuthTime) return false;
     return Date.now() - lastAuthTime < SESSION_DURATION;
-  }, [lastAuthTime]);
+  }, [lastAuthTime, SESSION_DURATION]); // Added SESSION_DURATION dependency
 
   const fetchMenu = useCallback(async () => {
     setIsLoading(true);
@@ -38,8 +37,8 @@ export default function MenuManagement() {
 
       if (error) throw error;
       setMenu((data as MenuItem[]) || []);
-    } catch (error) {
-      console.error("Error fetching menu:", error);
+    } catch (_error) {
+      console.error("Error fetching menu:", _error);
     } finally {
       setIsLoading(false);
     }
@@ -49,7 +48,6 @@ export default function MenuManagement() {
     fetchMenu();
   }, [fetchMenu]);
 
-  // --- SECURITY: TOTP GOOGLE AUTHENTICATOR VALIDATION ---
   const validateAction = (): boolean => {
     if (isSessionValid()) return true;
 
@@ -58,14 +56,10 @@ export default function MenuManagement() {
     );
 
     if (!inputCode) return false;
-
-    // Use the TOTP Secret from your .env
     const secret = import.meta.env.VITE_TOTP_SECRET;
 
     try {
-      // Use otplib to check if the entered code is valid
       const isValid = authenticator.check(inputCode, secret);
-
       if (isValid) {
         setLastAuthTime(Date.now());
         return true;
@@ -74,27 +68,29 @@ export default function MenuManagement() {
         return false;
       }
     } catch (err) {
-      alert("Error verifying code. Check console.");
+      alert("Error verifying code.");
       console.error(err);
       return false;
     }
   };
 
-  // ... (uploadImage function remains the same)
   const uploadImage = async (file: File): Promise<string> => {
     const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
     if (!allowedTypes.includes(file.type))
       throw new Error("Invalid file type.");
     if (file.size > 2 * 1024 * 1024)
       throw new Error("File too large (Max 2MB).");
+
     setIsUploading(true);
     try {
       const fileExt = file.name.split(".").pop();
       const fileName = `${Date.now()}.${fileExt}`;
-      const { error } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from("menu-images")
         .upload(fileName, file, { cacheControl: "3600", upsert: true });
-      if (error) throw error;
+
+      if (uploadError) throw uploadError;
+
       const { data: publicData } = supabase.storage
         .from("menu-images")
         .getPublicUrl(fileName);
@@ -121,7 +117,8 @@ export default function MenuManagement() {
       return alert("An item with this name already exists.");
     }
 
-    const itemToSave: any = {
+    // FIX: Replaced 'any' with a strict Partial<MenuItem>
+    const itemToSave: Partial<MenuItem> = {
       name: cleanName,
       description: item.description?.trim() || "",
       category: item.category,
@@ -137,18 +134,11 @@ export default function MenuManagement() {
         itemToSave.image = item.image || "/default-menu-image.png";
       }
 
-      const { data, error } = isNew
-        ? await supabase
-            .from("menu_items")
-            .insert([itemToSave])
-            .select()
-            .single()
-        : await supabase
-            .from("menu_items")
-            .update(itemToSave)
-            .eq("id", item.id)
-            .select()
-            .single();
+      const query = isNew
+        ? supabase.from("menu_items").insert([itemToSave])
+        : supabase.from("menu_items").update(itemToSave).eq("id", item.id);
+
+      const { data, error } = await query.select().single();
 
       if (error) throw error;
 
@@ -160,7 +150,8 @@ export default function MenuManagement() {
 
       alert("Changes saved successfully!");
       resetForm();
-    } catch (error: any) {
+    } catch (err: unknown) {
+      const error = err as { code?: string; message: string };
       alert(error.code === "23505" ? "Duplicate Name" : error.message);
     }
   };
@@ -177,7 +168,7 @@ export default function MenuManagement() {
       setMenu((prev) =>
         prev.map((i) => (i.id === item.id ? { ...i, status: newStatus } : i))
       );
-    } catch (error) {
+    } catch {
       alert("Failed to update status.");
     }
   };
@@ -191,7 +182,6 @@ export default function MenuManagement() {
 
   return (
     <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
           <h2 className="text-3xl font-extrabold text-gray-800">
@@ -209,23 +199,18 @@ export default function MenuManagement() {
         </div>
 
         <div className="flex gap-2">
-          {/* Toggle 2FA Setup QR Code */}
           <button
             onClick={() => setShowSetup(!showSetup)}
             className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
-            title="Setup Google Authenticator"
           >
             <QrCode size={24} />
           </button>
-
           <button
             onClick={() => {
               setEditForm({
                 name: "",
-                description: "",
                 category: "",
                 price: 0,
-                diet_tags: [],
                 status: "available",
               });
               setEditingId(-Date.now());
@@ -239,7 +224,6 @@ export default function MenuManagement() {
         </div>
       </div>
 
-      {/* QR Code Setup Section (Collapsible) */}
       {showSetup && (
         <div className="mb-8 flex justify-center">
           <div className="relative">
@@ -254,7 +238,6 @@ export default function MenuManagement() {
         </div>
       )}
 
-      {/* Table Section */}
       {isLoading ? (
         <div className="flex justify-center py-20">
           <Loader2 className="animate-spin text-indigo-600" size={40} />
@@ -272,7 +255,6 @@ export default function MenuManagement() {
         />
       )}
 
-      {/* Modal Section */}
       {editingId && (
         <EditMenuModal
           isOpen={!!editingId}
@@ -283,11 +265,14 @@ export default function MenuManagement() {
           onSave={() => saveMenuItem(editForm, adding)}
           onCancel={resetForm}
           onFormChange={(e) => {
-            const { name, value, selectedOptions } = e.target;
-            const finalValue =
-              name === "diet_tags"
-                ? Array.from(selectedOptions || [], (o: any) => o.value)
-                : value;
+            const { name, value } = e.target;
+            let finalValue: string | string[] = value;
+
+            // Type-safe handling of multi-select
+            if (e.target instanceof HTMLSelectElement && name === "diet_tags") {
+              finalValue = Array.from(e.target.selectedOptions, (o) => o.value);
+            }
+
             setEditForm((prev) => ({ ...prev, [name]: finalValue }));
           }}
           onFileChange={(file) => setImageFile(file)}

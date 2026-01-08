@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import {
-  AlertTriangle,
-  QrCode,
-  ArrowLeft,
-  Loader, // Added this import to fix "Cannot find name 'Loader'"
-} from "lucide-react";
+import { AlertTriangle, QrCode, ArrowLeft, Loader } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { supabase } from "../libs/supabaseClient";
+// Import the RealtimeChannel type from Supabase
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -17,9 +14,12 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const [showQrMode, setShowQrMode] = useState(false);
   const [qrId, setQrId] = useState<string | null>(null);
-  const [activeChannel, setActiveChannel] = useState<any>(null);
 
-  // Cleanup subscription on unmount
+  // FIX: Replaced <any> with <RealtimeChannel | null>
+  const [activeChannel, setActiveChannel] = useState<RealtimeChannel | null>(
+    null
+  );
+
   useEffect(() => {
     return () => {
       if (activeChannel) supabase.removeChannel(activeChannel);
@@ -53,7 +53,11 @@ export default function AdminLogin() {
             filter: `id=eq.${data.id}`,
           },
           (payload) => {
-            if (payload.new && payload.new.status === "authorized") {
+            if (
+              payload.new &&
+              "status" in payload.new &&
+              payload.new.status === "authorized"
+            ) {
               localStorage.setItem("adminToken", payload.new.auth_token);
               navigate("/admin");
             }
@@ -62,7 +66,7 @@ export default function AdminLogin() {
         .subscribe();
 
       setActiveChannel(channel);
-    } catch (err) {
+    } catch {
       setError("Failed to generate QR code. Try password login.");
     } finally {
       setLoading(false);

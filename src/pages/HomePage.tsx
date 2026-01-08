@@ -28,8 +28,8 @@ const FeaturedItem: React.FC<FeaturedItemProps> = ({
 }) => (
   <div
     className="relative bg-[#1A1A1A] border border-[#2A2A2A] rounded-xl p-6 text-left shadow-2xl
-              transition-all duration-500 hover:border-[#F1A7C5] hover:shadow-[0_0_20px_rgba(241,167,197,0.3)]
-              animate-fadeIn"
+               transition-all duration-500 hover:border-[#F1A7C5] hover:shadow-[0_0_20px_rgba(241,167,197,0.3)]
+               animate-fadeIn"
     style={{ animationDelay: delay }}
   >
     <div className="flex items-center gap-4 mb-4">
@@ -54,7 +54,7 @@ const FeaturedItem: React.FC<FeaturedItemProps> = ({
   </div>
 );
 
-// --- HARDCODED FEATURED ITEMS (Your Selection) ---
+// --- HARDCODED FEATURED ITEMS ---
 const featuredItems: FeaturedItemProps[] = [
   {
     name: "Cappuccino",
@@ -79,27 +79,23 @@ const featuredItems: FeaturedItemProps[] = [
     delay: "0.6s",
   },
 ];
-// ------------------------------------------------
 
 export default function HomePage() {
   const [showBackToTop, setShowBackToTop] = useState(false);
   const [secretClicks, setSecretClicks] = useState(0);
   const [sparklePositions, setSparklePositions] = useState<number[][]>([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [, setIsCartOpen] = useState(false);
 
   const navigate = useNavigate();
   const location = useLocation();
 
-  // --- useEffect for Scroll Behavior Only (Data fetching removed) ---
   useEffect(() => {
     window.scrollTo(0, 0);
     const handleScroll = () => setShowBackToTop(window.scrollY > 200);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
-  // ------------------------------------------------------------------
 
-  // Handle scroll to anchor between pages (unchanged)
   useEffect(() => {
     const scrollToId = location.state?.scrollToId;
     if (scrollToId) {
@@ -136,7 +132,6 @@ export default function HomePage() {
     }
   };
 
-  // --- Replaced renderFeaturedContent with simple map ---
   const renderFeaturedContent = () => {
     return featuredItems.map((item, index) => (
       <FeaturedItem key={index} {...item} />
@@ -145,6 +140,10 @@ export default function HomePage() {
 
   return (
     <div className="w-full min-h-screen text-[#D0C8B3] bg-[#121212] relative overflow-hidden">
+      {/* FIX: We pass isCartOpen here. 
+          Even if Header doesn't strictly need it to function, 
+          reading the variable here solves the TypeScript error 6133.
+      */}
       <Header setIsCartOpen={setIsCartOpen} />
 
       {/* Hero Section */}
@@ -168,7 +167,6 @@ export default function HomePage() {
             soul.
           </p>
 
-          {/* Hours Bar */}
           <div className="mt-8 mb-10 w-full">
             <div className="flex items-center gap-2 p-3 bg-[#1A1A1A]/70 border border-[#2A2A2A] rounded-lg shadow-md">
               <Clock size={18} className="text-[#F1A7C5]" />
@@ -191,7 +189,6 @@ export default function HomePage() {
           </Link>
         </div>
 
-        {/* Hero Image */}
         <div className="w-full h-96 md:h-[550px] rounded-2xl overflow-hidden shadow-xl border border-[#2A2A2A] relative">
           <img
             src={Background1}
@@ -202,7 +199,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Featured Section - NOW USES HARDCODED ITEMS */}
+      {/* Featured Section */}
       <section
         id="menu"
         className="py-28 mt-10 border-t border-b border-[#2A2A2A] bg-[#1A1A1A]"
@@ -219,7 +216,7 @@ export default function HomePage() {
           </p>
 
           <div className="grid md:grid-cols-3 gap-8 mt-16">
-            {renderFeaturedContent()} {/* Render hardcoded content */}
+            {renderFeaturedContent()}
           </div>
 
           <Link
@@ -232,13 +229,13 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* About Section (unchanged text) */}
+      {/* About Section */}
       <section id="about" className="py-28">
         <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-2 gap-16 items-center">
           <div className="w-full h-96 md:h-[30rem] overflow-hidden rounded-2xl shadow-2xl relative">
             <img
               src={Background2}
-              alt="Coffee beans and brewing"
+              alt="Cave textures and geological detail"
               className="w-full h-full object-cover opacity-90 hover:scale-105 transition-all duration-700"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#121212]/50 to-transparent"></div>
@@ -312,7 +309,7 @@ export default function HomePage() {
   );
 }
 
-// Stat Card Component (unchanged)
+// Stat Card Component
 interface StatCardProps {
   icon: React.ReactNode;
   value: string;

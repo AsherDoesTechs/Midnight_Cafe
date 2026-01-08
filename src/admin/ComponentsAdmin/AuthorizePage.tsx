@@ -69,7 +69,7 @@ export default function AuthorizePage() {
       if (error) throw error;
       setStatus("success");
       setTimeout(() => navigate("/admin"), 2000);
-    } catch (err) {
+    } catch {
       setStatus("error");
     }
   };

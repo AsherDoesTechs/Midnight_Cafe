@@ -1,9 +1,11 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+/* eslint-disable react-refresh/only-export-components */
+import React, { createContext, useContext, useState } from "react";
 import type { ReactNode } from "react";
 
 interface AdminAuthContextType {
   isAuthenticated: boolean;
   logout: () => void;
+  setIsAuthenticated: (value: boolean) => void;
 }
 
 const AdminAuthContext = createContext<AdminAuthContextType | undefined>(
@@ -13,18 +15,13 @@ const AdminAuthContext = createContext<AdminAuthContextType | undefined>(
 export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({
   children,
 }) => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-
-  useEffect(() => {
+  // FIX: Initialize state directly from storage to avoid cascading renders
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    if (typeof window === "undefined") return false;
     const adminToken = import.meta.env.VITE_ADMIN_TOKEN;
     const token = localStorage.getItem("adminToken") || adminToken;
-
-    if (token) {
-      setIsAuthenticated(true);
-    }
-    // Note: Do not redirect to /admin-login here.
-    // Handle redirection in your ProtectedRoute or App router logic instead.
-  }, []);
+    return !!token;
+  });
 
   const logout = () => {
     localStorage.removeItem("adminToken");
@@ -33,12 +30,15 @@ export const AdminAuthProvider: React.FC<{ children: ReactNode }> = ({
   };
 
   return (
-    <AdminAuthContext.Provider value={{ isAuthenticated, logout }}>
+    <AdminAuthContext.Provider
+      value={{ isAuthenticated, logout, setIsAuthenticated }}
+    >
       {children}
     </AdminAuthContext.Provider>
   );
 };
 
+// Helper hook
 export const useAdminAuth = (): AdminAuthContextType => {
   const context = useContext(AdminAuthContext);
   if (!context) {

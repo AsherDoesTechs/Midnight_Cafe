@@ -3,6 +3,8 @@ import * as React from "react";
 import { Lightbulb, Send, PlusCircle } from "lucide-react";
 import { supabase } from "../libs/supabaseClient";
 
+/* ===================== TYPES ===================== */
+
 interface CustomIdea {
   id: number;
   title: string;
@@ -11,10 +13,22 @@ interface CustomIdea {
   details: string;
 }
 
+// Internal interface for the database structure
+interface CustomIdeaRow {
+  id: number;
+  title: string;
+  details: string;
+  status: "Draft" | "Submitted" | "Processing";
+  created_at: string;
+  user_id: string;
+}
+
 interface IdeaFormProps {
   onIdeaAdded: () => void;
   onClose: () => void;
 }
+
+/* ===================== SUB-COMPONENTS ===================== */
 
 const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
   const [title, setTitle] = useState("");
@@ -31,7 +45,6 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
     setIsSubmitting(true);
 
     try {
-      // FIX: Use getUser() instead of user()
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -63,7 +76,7 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
   };
 
   return (
-    <div className="bg-[#1C1C1C] p-6 rounded-lg border border-[#F1A7C5] mb-6">
+    <div className="bg-[#1C1C1C] p-6 rounded-lg border border-[#F1A7C5] mb-6 shadow-xl">
       <h4 className="text-xl font-bold text-[#F1A7C5] mb-4">
         Create New Idea Draft
       </h4>
@@ -80,7 +93,7 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full p-2 bg-[#333] border border-[#444] rounded-md text-white focus:ring-[#F1A7C5] focus:border-[#F1A7C5]"
+            className="w-full p-2 bg-[#333] border border-[#444] rounded-md text-white focus:ring-1 focus:ring-[#F1A7C5] focus:outline-none"
             placeholder="e.g., Triple Chocolate Lava Cake"
             required
             disabled={isSubmitting}
@@ -98,7 +111,7 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
             value={details}
             onChange={(e) => setDetails(e.target.value)}
             rows={4}
-            className="w-full p-2 bg-[#333] border border-[#444] rounded-md text-white focus:ring-[#F1A7C5] focus:border-[#F1A7C5]"
+            className="w-full p-2 bg-[#333] border border-[#444] rounded-md text-white focus:ring-1 focus:ring-[#F1A7C5] focus:outline-none"
             placeholder="Describe ingredients, size, and special requirements."
             required
             disabled={isSubmitting}
@@ -115,7 +128,7 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
           </button>
           <button
             type="submit"
-            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center gap-1 disabled:bg-green-700 disabled:opacity-75"
+            className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition flex items-center gap-2 disabled:opacity-75"
             disabled={isSubmitting}
           >
             {isSubmitting ? "Saving..." : "Save as Draft"} <Send size={16} />
@@ -126,6 +139,8 @@ const IdeaForm: React.FC<IdeaFormProps> = ({ onIdeaAdded, onClose }) => {
   );
 };
 
+/* ===================== MAIN COMPONENT ===================== */
+
 const CustomIdeas: React.FC = () => {
   const [ideas, setIdeas] = useState<CustomIdea[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,13 +149,11 @@ const CustomIdeas: React.FC = () => {
   const fetchIdeas = useCallback(async () => {
     setLoading(true);
     try {
-      // FIX: Use getUser() instead of user()
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
         setIdeas([]);
-        setLoading(false);
         return;
       }
 
@@ -152,13 +165,16 @@ const CustomIdeas: React.FC = () => {
 
       if (error) throw error;
 
-      const formattedData = (data || []).map((idea: any) => ({
-        id: idea.id,
-        title: idea.title,
-        details: idea.details,
-        status: idea.status,
-        date: new Date(idea.created_at).toLocaleDateString(),
-      }));
+      // FIX: Typed 'idea' as CustomIdeaRow to replace 'any'
+      const formattedData: CustomIdea[] = ((data as CustomIdeaRow[]) || []).map(
+        (idea) => ({
+          id: idea.id,
+          title: idea.title,
+          details: idea.details,
+          status: idea.status,
+          date: new Date(idea.created_at).toLocaleDateString(),
+        })
+      );
 
       setIdeas(formattedData);
     } catch (err) {
@@ -174,14 +190,13 @@ const CustomIdeas: React.FC = () => {
   }, [fetchIdeas]);
 
   const handleAction = async (id: number, action: "submit" | "delete") => {
-    // FIX: Use getUser()
     const {
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return;
 
-    if (action === "submit") {
-      try {
+    try {
+      if (action === "submit") {
         const { error } = await supabase
           .from("custom_ideas")
           .update({ status: "Submitted" })
@@ -189,17 +204,9 @@ const CustomIdeas: React.FC = () => {
           .eq("user_id", user.id);
 
         if (error) throw error;
-
         await fetchIdeas();
         alert(`Idea #${id} submitted for review!`);
-      } catch (err) {
-        console.error("Error submitting idea:", err);
-        alert("Failed to submit idea.");
-      }
-    }
-
-    if (action === "delete") {
-      try {
+      } else if (action === "delete") {
         const { error } = await supabase
           .from("custom_ideas")
           .delete()
@@ -207,18 +214,19 @@ const CustomIdeas: React.FC = () => {
           .eq("user_id", user.id);
 
         if (error) throw error;
-
-        setIdeas(ideas.filter((idea) => idea.id !== id));
+        setIdeas((prev) => prev.filter((idea) => idea.id !== id));
         alert(`Idea #${id} deleted.`);
-      } catch (err) {
-        console.error("Error deleting idea:", err);
-        alert("Failed to delete idea.");
       }
+    } catch (err) {
+      console.error(`Error during ${action}:`, err);
+      alert(`Failed to ${action} idea.`);
     }
   };
 
   if (loading)
-    return <p className="text-center text-gray-400">Loading custom ideas...</p>;
+    return (
+      <p className="text-center text-gray-400 p-10">Loading custom ideas...</p>
+    );
 
   return (
     <div className="p-4 space-y-6">

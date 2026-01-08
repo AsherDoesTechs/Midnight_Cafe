@@ -58,7 +58,7 @@ export default function AdminAuthorize() {
       setStatus("success");
       // Auto-close or redirect after 3 seconds
       setTimeout(() => navigate("/"), 3000);
-    } catch (err) {
+    } catch {
       setError("Authorization failed. Please try again.");
       setStatus("error");
     }

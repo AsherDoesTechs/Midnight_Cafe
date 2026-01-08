@@ -35,7 +35,7 @@ const UIDProfile: React.FC = () => {
           recentBuys: ["Fetched Item 1", "Fetched Item 2"],
           favorites: ["Fetched Favorite A", "Fetched Favorite B"],
         });
-      } catch (err) {
+      } catch {
         toast.error("Failed to fetch user data.");
       } finally {
         setLoading(false);
@@ -54,7 +54,7 @@ const UIDProfile: React.FC = () => {
     try {
       // TODO: Call backend to update profile
       toast.success("Profile updated successfully!", { autoClose: 2000 });
-    } catch (err) {
+    } catch {
       toast.error("Failed to update profile.");
     }
   };

@@ -4,11 +4,23 @@ import { useCart } from "../context/CartContext";
 import { Heart, ShoppingCart, Trash2, Tag, Minus, Plus } from "lucide-react";
 import { supabase } from "../libs/supabaseClient";
 
+/* ===================== TYPES ===================== */
+
 interface FavoriteItem {
-  id: number; // menu_item_id
+  id: number;
   name: string;
   price: number;
   category: string;
+}
+
+// Interface for the Supabase join response
+interface SupabaseFavoriteResponse {
+  menu_items: {
+    id: number;
+    name: string;
+    price: number;
+    category: string;
+  } | null;
 }
 
 interface FavoriteCardProps {
@@ -16,6 +28,8 @@ interface FavoriteCardProps {
   handleAddToCart: (item: FavoriteItem, quantity: number) => void;
   handleRemoveFavorite: (item: FavoriteItem) => void;
 }
+
+/* ===================== SUB-COMPONENTS ===================== */
 
 const FavoriteCard: React.FC<FavoriteCardProps> = ({
   item,
@@ -106,6 +120,8 @@ const FavoriteCard: React.FC<FavoriteCardProps> = ({
   );
 };
 
+/* ===================== MAIN COMPONENT ===================== */
+
 const Favorites: React.FC = () => {
   const { addToCart } = useCart();
   const [favorites, setFavorites] = useState<FavoriteItem[]>([]);
@@ -123,13 +139,11 @@ const Favorites: React.FC = () => {
   const fetchFavorites = useCallback(async () => {
     setLoading(true);
     try {
-      // FIX: Use getUser()
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) {
         setFavorites([]);
-        setLoading(false);
         return;
       }
 
@@ -140,12 +154,17 @@ const Favorites: React.FC = () => {
 
       if (error) throw error;
 
-      const transformedData: FavoriteItem[] = (data || []).map((fav: any) => ({
-        id: fav.menu_items.id,
-        name: fav.menu_items.name,
-        price: fav.menu_items.price,
-        category: fav.menu_items.category,
-      }));
+      // Type-safe transformation of nested Supabase data
+      const transformedData: FavoriteItem[] = (
+        data as unknown as SupabaseFavoriteResponse[]
+      )
+        .filter((fav) => fav.menu_items !== null)
+        .map((fav) => ({
+          id: fav.menu_items!.id,
+          name: fav.menu_items!.name,
+          price: fav.menu_items!.price,
+          category: fav.menu_items!.category,
+        }));
 
       setFavorites(transformedData);
     } catch (err) {
@@ -161,6 +180,8 @@ const Favorites: React.FC = () => {
   }, [fetchFavorites]);
 
   const handleRemoveFavorite = async (itemToRemove: FavoriteItem) => {
+    // Optimistic Update
+    const previousFavorites = [...favorites];
     setFavorites((prev) => prev.filter((i) => i.id !== itemToRemove.id));
 
     try {
@@ -175,21 +196,17 @@ const Favorites: React.FC = () => {
         .eq("user_id", user.id)
         .eq("menu_item_id", itemToRemove.id);
 
-      if (error) {
-        setFavorites((prev) => [...prev, itemToRemove]);
-        throw error;
-      }
+      if (error) throw error;
 
       showToast(`💔 Removed ${itemToRemove.name} from favorites.`);
     } catch (err) {
       console.error("Error removing favorite:", err);
-      fetchFavorites();
+      setFavorites(previousFavorites); // Rollback on error
     }
   };
 
   const handleAddToCart = useCallback(
     (item: FavoriteItem, quantity: number) => {
-      // FIX: Include menu_item_id to satisfy CartItem interface
       addToCart({
         menu_item_id: item.id,
         name: item.name,
@@ -244,6 +261,7 @@ const Favorites: React.FC = () => {
         </div>
       )}
 
+      {/* Toast Notification */}
       <div
         className={`fixed bottom-8 right-8 z-50 transition-all duration-300 transform ${
           toast.visible

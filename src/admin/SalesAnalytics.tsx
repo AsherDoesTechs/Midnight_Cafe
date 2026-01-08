@@ -3,7 +3,6 @@ import {
   TrendingUp,
   Loader,
   AlertTriangle,
-  RotateCcw,
   Download,
   DollarSign,
   ShoppingCart,
@@ -31,15 +30,31 @@ interface AnalyticsData {
   sales: number;
 }
 
-interface KPIMetrics {
-  totalRevenue: number;
-  totalSales: number;
-  averageOrderValue: number;
+interface KPICardProps {
+  title: string;
+  value: string | number;
+  icon: React.ElementType;
+  color: string;
+  subValue?: string;
+}
+
+// Added interface for Supabase Order response
+interface SupabaseOrderResponse {
+  created_at: string;
+  total_amount: number | null;
+  status: string | null;
+  payment_status: string | null;
 }
 
 /* ===================== SUB-COMPONENTS ===================== */
 
-const KPICard = ({ title, value, icon: Icon, color, subValue }: any) => (
+const KPICard = ({
+  title,
+  value,
+  icon: Icon,
+  color,
+  subValue,
+}: KPICardProps) => (
   <div className="bg-white p-6 rounded-xl border border-neutral-200 shadow-sm flex items-center justify-between">
     <div className="flex items-center gap-4">
       <div className={`p-3 rounded-lg ${color} text-white`}>
@@ -76,16 +91,15 @@ const RevenueBarChart = ({ data }: { data: AnalyticsData[] }) => (
       />
       <Tooltip
         cursor={{ fill: "#f9fafb" }}
-        contentStyle={
-          {
-            borderRadius: "12px",
-            border: "none",
-            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-          } as React.CSSProperties
-        }
-        // FIX: Handled value as unknown/any to avoid TS18048 and forced numeric check
-        formatter={(value: any) => {
-          const numValue = typeof value === "number" ? value : 0;
+        contentStyle={{
+          borderRadius: "12px",
+          border: "none",
+          boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+        }}
+        formatter={(
+          value: number | string | (number | string)[] | undefined
+        ) => {
+          const numValue = value ? Number(value) : 0;
           return [`₱${numValue.toLocaleString()}`, "Revenue"];
         }}
       />
@@ -117,16 +131,15 @@ const SalesLineChart = ({ data }: { data: AnalyticsData[] }) => (
         tick={{ fill: "#9ca3af" }}
       />
       <Tooltip
-        contentStyle={
-          {
-            borderRadius: "12px",
-            border: "none",
-            boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
-          } as React.CSSProperties
-        }
-        // FIX: Handled value as unknown/any to avoid TS18048
-        formatter={(value: any) => {
-          const numValue = typeof value === "number" ? value : 0;
+        contentStyle={{
+          borderRadius: "12px",
+          border: "none",
+          boxShadow: "0 10px 15px -3px rgba(0,0,0,0.1)",
+        }}
+        formatter={(
+          value: number | string | (number | string)[] | undefined
+        ) => {
+          const numValue = value ? Number(value) : 0;
           return [numValue.toLocaleString(), "Orders"];
         }}
       />
@@ -183,7 +196,8 @@ const SalesAnalytics = () => {
 
       const monthlyMap: Record<string, { revenue: number; sales: number }> = {};
 
-      data?.forEach((order) => {
+      // Type-safe iteration over Supabase data
+      (data as unknown as SupabaseOrderResponse[])?.forEach((order) => {
         const isPaid = order.payment_status?.toLowerCase() === "paid";
         const isCompleted = order.status?.toLowerCase() === "completed";
 
@@ -202,7 +216,7 @@ const SalesAnalytics = () => {
         monthlyMap[monthKey].sales += 1;
       });
 
-      const formattedData = Object.entries(monthlyMap)
+      const formattedData: AnalyticsData[] = Object.entries(monthlyMap)
         .map(([month, values]) => ({
           month,
           revenue: values.revenue,
@@ -213,8 +227,11 @@ const SalesAnalytics = () => {
         );
 
       setSalesData(formattedData);
-    } catch (e: any) {
-      setError(e.message || "An unexpected error occurred");
+    } catch (err) {
+      // FIX: Safe error message handling
+      const errorMessage =
+        err instanceof Error ? err.message : "An unexpected error occurred";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -237,7 +254,11 @@ const SalesAnalytics = () => {
   const exportCSV = () => {
     const csvContent = [
       ["Month", "Revenue", "Orders"],
-      ...salesData.map((d) => [d.month, d.revenue, d.sales]),
+      ...salesData.map((d) => [
+        d.month,
+        d.revenue.toString(),
+        d.sales.toString(),
+      ]),
     ]
       .map((e) => e.join(","))
       .join("\n");
@@ -256,7 +277,7 @@ const SalesAnalytics = () => {
       <div className="flex flex-col items-center justify-center min-h-[400px]">
         <Loader className="animate-spin text-indigo-600 mb-4" size={40} />
         <p className="text-neutral-500 font-medium">
-          Analyzing combined orders...
+          Analyzing revenue trends...
         </p>
       </div>
     );
@@ -277,15 +298,14 @@ const SalesAnalytics = () => {
     );
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8">
-      {/* HEADER */}
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <h2 className="text-3xl font-extrabold text-neutral-900 tracking-tight">
             Sales Analytics
           </h2>
           <p className="text-neutral-500 font-medium">
-            Aggregated data from combined_orders
+            Aggregated revenue data from all order types
           </p>
         </div>
 
@@ -319,23 +339,9 @@ const SalesAnalytics = () => {
           >
             <Download size={18} /> Export CSV
           </button>
-
-          {(filterMonth ||
-            filterYear !== new Date().getFullYear().toString()) && (
-            <button
-              onClick={() => {
-                setFilterMonth("");
-                setFilterYear(new Date().getFullYear().toString());
-              }}
-              className="p-2 text-neutral-400 hover:text-neutral-600 transition-colors"
-            >
-              <RotateCcw size={20} />
-            </button>
-          )}
         </div>
       </div>
 
-      {/* KPIS */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <KPICard
           title="Total Revenue"
@@ -356,11 +362,10 @@ const SalesAnalytics = () => {
           value={`₱${kpis.averageOrderValue.toFixed(2)}`}
           icon={TrendingUp}
           color="bg-orange-500"
-          subValue="Per Order Average"
+          subValue="Ticket Average"
         />
       </div>
 
-      {/* CHARTS */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-white p-6 rounded-2xl border border-neutral-100 shadow-sm">
           <h3 className="font-bold text-neutral-800 text-lg mb-6">
@@ -377,7 +382,6 @@ const SalesAnalytics = () => {
         </div>
       </div>
 
-      {/* TABLE */}
       <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-neutral-50 bg-neutral-50/30">
           <h3 className="font-bold text-neutral-800">
@@ -388,16 +392,10 @@ const SalesAnalytics = () => {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-neutral-50/50 text-neutral-400 text-[11px] uppercase tracking-wider font-bold">
-                <th className="px-8 py-4 tracking-widest">Reporting Month</th>
-                <th className="px-8 py-4 text-right tracking-widest">
-                  Total Revenue
-                </th>
-                <th className="px-8 py-4 text-right tracking-widest">
-                  Transactions
-                </th>
-                <th className="px-8 py-4 text-right tracking-widest">
-                  Avg Ticket
-                </th>
+                <th className="px-8 py-4">Reporting Month</th>
+                <th className="px-8 py-4 text-right">Total Revenue</th>
+                <th className="px-8 py-4 text-right">Transactions</th>
+                <th className="px-8 py-4 text-right">Avg Ticket</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-50">
@@ -425,16 +423,6 @@ const SalesAnalytics = () => {
                   </td>
                 </tr>
               ))}
-              {salesData.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={4}
-                    className="px-8 py-20 text-center text-neutral-400 italic font-medium"
-                  >
-                    No matching sales records found for the selected filter.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>

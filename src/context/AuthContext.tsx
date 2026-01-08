@@ -1,11 +1,14 @@
-import React, {
+/* eslint-disable react-refresh/only-export-components */
+import {
   createContext,
   useContext,
   useEffect,
   useState,
   useCallback,
 } from "react";
+import type { ReactNode } from "react";
 import { supabase } from "../libs/supabaseClient";
+import type { User as SupabaseUser } from "@supabase/supabase-js";
 
 interface User {
   id: string;
@@ -21,15 +24,17 @@ interface AuthContextType {
   updateUser: (newUserData: Partial<User>) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+interface AuthProviderProps {
+  children: ReactNode;
+}
+
+export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const mapUser = useCallback((sbUser: any): User | null => {
+  const mapUser = useCallback((sbUser: SupabaseUser | null): User | null => {
     if (!sbUser) return null;
 
     return {
@@ -43,22 +48,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   useEffect(() => {
+    let mounted = true;
+
     const loadSession = async () => {
-      const { data } = await supabase.auth.getSession();
-      setUser(mapUser(data.session?.user ?? null));
-      setIsLoading(false);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (mounted) {
+        setUser(mapUser(session?.user ?? null));
+        setIsLoading(false);
+      }
     };
 
     loadSession();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (mounted) {
         setUser(mapUser(session?.user ?? null));
+        setIsLoading(false);
       }
-    );
+    });
 
     return () => {
-      listener.subscription.unsubscribe();
+      mounted = false;
+      subscription.unsubscribe();
     };
   }, [mapUser]);
 
@@ -68,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const updateUser = useCallback((newUserData: Partial<User>) => {
-    setUser((prev) => (prev ? { ...prev, ...newUserData } : prev));
+    setUser((prev) => (prev ? { ...prev, ...newUserData } : null));
   }, []);
 
   return (

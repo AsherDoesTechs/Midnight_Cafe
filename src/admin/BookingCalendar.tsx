@@ -11,6 +11,21 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import { supabase } from "../libs/supabaseClient";
 
+// 1. Defined a specific interface for the Supabase Join result
+// to replace the 'any' in the .map() function
+interface SupabaseBookingResponse {
+  id: number;
+  combined_id: number;
+  customer_name: string;
+  space_id: number;
+  start_time: string | null;
+  end_time: string | null;
+  status: "Confirmed" | "Cancelled" | "Completed" | "No Show" | "In Progress";
+  spaces: {
+    title: string;
+  } | null;
+}
+
 interface BookingScheduleItem {
   id: number;
   combined_id: number;
@@ -35,6 +50,9 @@ interface StatCardProps {
   color: string;
   subValue?: string;
 }
+
+// Added type for react-calendar value change
+type CalendarValue = Date | null | [Date | null, Date | null];
 
 const StatCard = ({
   title,
@@ -77,8 +95,17 @@ const BookingCalendar: React.FC = () => {
 
       if (bErr) throw bErr;
 
-      const formatted = (bData || []).map((b: any) => ({
-        ...b,
+      // FIX: Cast the raw response to our specific join interface
+      const formatted = (
+        (bData as unknown as SupabaseBookingResponse[]) || []
+      ).map((b) => ({
+        id: b.id,
+        combined_id: b.combined_id,
+        customer_name: b.customer_name,
+        space_id: b.space_id,
+        start_time: b.start_time,
+        end_time: b.end_time,
+        status: b.status,
         space_name: b.spaces?.title || "Unknown",
       })) as BookingScheduleItem[];
 
@@ -132,11 +159,13 @@ const BookingCalendar: React.FC = () => {
     };
   }, [schedule]);
 
-  const handleDateChange = (value: any) => {
-    const date = value as Date;
-    setSelectedDate(date);
-    const dateStr = date.toISOString().split("T")[0];
-    setDayEvents(schedule.filter((b) => b.start_time?.startsWith(dateStr)));
+  // FIX: Replaced 'any' with properly typed CalendarValue
+  const handleDateChange = (value: CalendarValue) => {
+    if (value instanceof Date) {
+      setSelectedDate(value);
+      const dateStr = value.toISOString().split("T")[0];
+      setDayEvents(schedule.filter((b) => b.start_time?.startsWith(dateStr)));
+    }
   };
 
   if (loading)
