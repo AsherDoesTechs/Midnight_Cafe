@@ -26,6 +26,7 @@ import { AdminAuthProvider } from "./context/AdminAuthContext";
 import UserDash from "./user/UserDash";
 import AdminDash from "./admin/AdminDashboard";
 import AdminLogin from "./admin/AdminLogin";
+import AdminAuthorize from "./admin/AdminAuthorize";
 
 function AppContent() {
   const [isCartOpen, setIsCartOpen] = useState<boolean>(false);
