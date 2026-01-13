@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Plus, Loader2, Lock, ShieldCheck, QrCode } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  Lock,
+  ShieldCheck,
+  QrCode,
+  X,
+  CheckCircle2,
+} from "lucide-react";
 import { supabase } from ".././libs/supabaseClient";
 import MenuTable from "../admin/ComponentsAdmin/MenuTable";
 import EditMenuModal from "../admin/ComponentsAdmin/EditMenuModal";
@@ -8,6 +16,7 @@ import { authenticator } from "otplib";
 import { AdminSetup } from "./ComponentsAdmin/qrcode";
 
 export default function MenuManagement() {
+  // --- STATE ---
   const [menu, setMenu] = useState<MenuItem[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editForm, setEditForm] = useState<Partial<MenuItem>>({});
@@ -15,17 +24,51 @@ export default function MenuManagement() {
   const [isLoading, setIsLoading] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
-  const [showSetup, setShowSetup] = useState(false);
 
-  // --- SECURITY CONFIG ---
+  // --- AUTH STATE ---
+  const [showSetup, setShowSetup] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [authInput, setAuthInput] = useState("");
+  const [showSuccessFlash, setShowSuccessFlash] = useState(false);
   const [lastAuthTime, setLastAuthTime] = useState<number | null>(null);
-  // Memoize duration so it's a stable dependency for the hook
+
   const SESSION_DURATION = useMemo(() => 15 * 60 * 1000, []);
 
   const isSessionValid = useCallback(() => {
     if (!lastAuthTime) return false;
     return Date.now() - lastAuthTime < SESSION_DURATION;
-  }, [lastAuthTime, SESSION_DURATION]); // Added SESSION_DURATION dependency
+  }, [lastAuthTime, SESSION_DURATION]);
+
+  // --- AUTO-VALIDATION LOGIC ---
+  const handleAuthInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setAuthInput(val);
+
+    if (val.length === 6) {
+      const secret = import.meta.env.VITE_ADMIN_ACCESS_CODE;
+      try {
+        const isValid = authenticator.check(val, secret);
+        if (isValid) {
+          setLastAuthTime(Date.now());
+          setAuthInput("");
+          setIsVerifying(false);
+          setShowSuccessFlash(true);
+          setTimeout(() => setShowSuccessFlash(false), 2000);
+        } else {
+          setAuthInput("");
+          alert("Invalid code. Please try again.");
+        }
+      } catch (err) {
+        console.error("Auth Error:", err);
+      }
+    }
+  };
+
+  const validateAction = (): boolean => {
+    if (isSessionValid()) return true;
+    setIsVerifying(true);
+    return false;
+  };
 
   const fetchMenu = useCallback(async () => {
     setIsLoading(true);
@@ -34,11 +77,10 @@ export default function MenuManagement() {
         .from("menu_items")
         .select("*")
         .order("id", { ascending: false });
-
       if (error) throw error;
       setMenu((data as MenuItem[]) || []);
-    } catch (_error) {
-      console.error("Error fetching menu:", _error);
+    } catch (err) {
+      console.error(err);
     } finally {
       setIsLoading(false);
     }
@@ -48,58 +90,7 @@ export default function MenuManagement() {
     fetchMenu();
   }, [fetchMenu]);
 
-  const validateAction = (): boolean => {
-    if (isSessionValid()) return true;
-
-    const inputCode = prompt(
-      "Enter the 6-digit code from your Google Authenticator app:"
-    );
-
-    if (!inputCode) return false;
-    const secret = import.meta.env.VITE_TOTP_SECRET;
-
-    try {
-      const isValid = authenticator.check(inputCode, secret);
-      if (isValid) {
-        setLastAuthTime(Date.now());
-        return true;
-      } else {
-        alert("Invalid code. Please check your app and try again.");
-        return false;
-      }
-    } catch (err) {
-      alert("Error verifying code.");
-      console.error(err);
-      return false;
-    }
-  };
-
-  const uploadImage = async (file: File): Promise<string> => {
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
-    if (!allowedTypes.includes(file.type))
-      throw new Error("Invalid file type.");
-    if (file.size > 2 * 1024 * 1024)
-      throw new Error("File too large (Max 2MB).");
-
-    setIsUploading(true);
-    try {
-      const fileExt = file.name.split(".").pop();
-      const fileName = `${Date.now()}.${fileExt}`;
-      const { error: uploadError } = await supabase.storage
-        .from("menu-images")
-        .upload(fileName, file, { cacheControl: "3600", upsert: true });
-
-      if (uploadError) throw uploadError;
-
-      const { data: publicData } = supabase.storage
-        .from("menu-images")
-        .getPublicUrl(fileName);
-      return publicData.publicUrl;
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
+  // --- CRUD ACTIONS ---
   const saveMenuItem = async (item: Partial<MenuItem>, isNew: boolean) => {
     if (!validateAction()) return;
 
@@ -110,6 +101,7 @@ export default function MenuManagement() {
       return alert("Please check all required fields.");
     }
 
+    // Checking for duplicates (isNew is now used)
     if (
       isNew &&
       menu.some((m) => m.name.toLowerCase() === cleanName.toLowerCase())
@@ -117,21 +109,31 @@ export default function MenuManagement() {
       return alert("An item with this name already exists.");
     }
 
-    // FIX: Replaced 'any' with a strict Partial<MenuItem>
-    const itemToSave: Partial<MenuItem> = {
-      name: cleanName,
-      description: item.description?.trim() || "",
-      category: item.category,
-      price: priceNum,
-      status: item.status || "available",
-      diet_tags: item.diet_tags || [],
-    };
-
+    setIsUploading(true); // setIsUploading is now used
     try {
+      const itemToSave: Partial<MenuItem> = {
+        name: cleanName,
+        description: item.description?.trim() || "",
+        category: item.category,
+        price: priceNum,
+        status: item.status || "available",
+        diet_tags: item.diet_tags || [],
+      };
+
+      // Handle image upload if a new file exists
       if (imageFile) {
-        itemToSave.image = await uploadImage(imageFile);
-      } else {
-        itemToSave.image = item.image || "/default-menu-image.png";
+        const fileExt = imageFile.name.split(".").pop();
+        const fileName = `${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("menu-images")
+          .upload(fileName, imageFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicData } = supabase.storage
+          .from("menu-images")
+          .getPublicUrl(fileName);
+        itemToSave.image = publicData.publicUrl;
       }
 
       const query = isNew
@@ -149,15 +151,18 @@ export default function MenuManagement() {
         );
 
       alert("Changes saved successfully!");
-      resetForm();
-    } catch (err: unknown) {
-      const error = err as { code?: string; message: string };
-      alert(error.code === "23505" ? "Duplicate Name" : error.message);
+      setEditingId(null);
+      setAdding(false);
+      setImageFile(null);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setIsUploading(false); // setIsUploading is now used
     }
   };
 
   const handleUpdateStatus = async (item: MenuItem) => {
-    if (!validateAction()) return;
+    if (!validateAction()) return; // item is now used here
     const newStatus = item.status === "archived" ? "available" : "archived";
     try {
       const { error } = await supabase
@@ -173,35 +178,59 @@ export default function MenuManagement() {
     }
   };
 
-  const resetForm = () => {
-    setEditingId(null);
-    setEditForm({});
-    setAdding(false);
-    setImageFile(null);
-  };
-
   return (
-    <div className="p-4 md:p-8 bg-gray-50 min-h-screen">
+    <div
+      className={`p-4 md:p-8 min-h-screen transition-colors duration-500 ${
+        showSuccessFlash ? "bg-green-50" : "bg-gray-50"
+      }`}
+    >
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div className="flex items-center gap-4">
           <h2 className="text-3xl font-extrabold text-gray-800">
             🍽 Menu Management
           </h2>
-          {isSessionValid() ? (
-            <div className="flex items-center gap-1 text-xs font-bold text-green-600 bg-green-100 px-2 py-1 rounded-full animate-pulse">
-              <ShieldCheck size={14} /> AUTHORIZED
-            </div>
-          ) : (
-            <div className="flex items-center gap-1 text-xs font-bold text-gray-400 bg-gray-200 px-2 py-1 rounded-full">
-              <Lock size={14} /> LOCKED
-            </div>
-          )}
+          <div className="relative h-10 flex items-center">
+            {isSessionValid() ? (
+              <div className="flex items-center gap-2 text-xs font-bold text-green-700 bg-green-100 border border-green-200 px-3 py-1.5 rounded-full animate-in fade-in zoom-in duration-300">
+                <ShieldCheck size={16} className="text-green-600" />
+                AUTHORIZED SESSION
+              </div>
+            ) : isVerifying ? (
+              <div className="flex items-center gap-2 bg-white p-1 pr-3 border-2 border-indigo-500 rounded-lg shadow-sm">
+                <input
+                  autoFocus
+                  type="text"
+                  placeholder="6-digit code"
+                  value={authInput}
+                  onChange={handleAuthInputChange}
+                  className="w-32 px-2 py-1 text-sm font-mono tracking-widest focus:outline-none"
+                />
+                <button
+                  onClick={() => setIsVerifying(false)}
+                  className="text-gray-400 hover:text-red-500"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsVerifying(true)}
+                className="flex items-center gap-2 text-xs font-bold text-gray-500 bg-gray-200 hover:bg-gray-300 px-3 py-1.5 rounded-full transition-all"
+              >
+                <Lock size={14} /> LOCKED (CLICK TO UNLOCK)
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="flex gap-2">
           <button
             onClick={() => setShowSetup(!showSetup)}
-            className="p-2 text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+            className={`p-2 rounded-lg transition-colors ${
+              showSetup
+                ? "bg-indigo-600 text-white"
+                : "text-gray-600 hover:bg-gray-200"
+            }`}
           >
             <QrCode size={24} />
           </button>
@@ -217,21 +246,30 @@ export default function MenuManagement() {
               setAdding(true);
             }}
             disabled={!!editingId}
-            className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center"
+            className="bg-indigo-600 text-white px-5 py-2 rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center shadow-md"
           >
             <Plus size={20} className="mr-2" /> Add New Item
           </button>
         </div>
       </div>
 
+      {showSuccessFlash && (
+        <div className="fixed inset-0 pointer-events-none flex items-center justify-center z-50">
+          <div className="bg-green-500 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-3 animate-bounce">
+            <CheckCircle2 size={32} />
+            <span className="text-xl font-bold">Access Granted!</span>
+          </div>
+        </div>
+      )}
+
       {showSetup && (
-        <div className="mb-8 flex justify-center">
+        <div className="mb-8 flex justify-center animate-in slide-in-from-top duration-300">
           <div className="relative">
             <button
               onClick={() => setShowSetup(false)}
-              className="absolute top-2 right-2 text-gray-400 hover:text-black"
+              className="absolute -top-2 -right-2 bg-white rounded-full shadow-md p-1 text-gray-400 border"
             >
-              ✕
+              <X size={16} />
             </button>
             <AdminSetup />
           </div>
@@ -263,18 +301,13 @@ export default function MenuManagement() {
           isAdding={adding}
           isUploading={isUploading}
           onSave={() => saveMenuItem(editForm, adding)}
-          onCancel={resetForm}
-          onFormChange={(e) => {
-            const { name, value } = e.target;
-            let finalValue: string | string[] = value;
-
-            // Type-safe handling of multi-select
-            if (e.target instanceof HTMLSelectElement && name === "diet_tags") {
-              finalValue = Array.from(e.target.selectedOptions, (o) => o.value);
-            }
-
-            setEditForm((prev) => ({ ...prev, [name]: finalValue }));
+          onCancel={() => {
+            setEditingId(null);
+            setAdding(false);
           }}
+          onFormChange={(e) =>
+            setEditForm({ ...editForm, [e.target.name]: e.target.value })
+          }
           onFileChange={(file) => setImageFile(file)}
         />
       )}
