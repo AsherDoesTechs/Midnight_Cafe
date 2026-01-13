@@ -32,7 +32,7 @@ const Header = forwardRef<HTMLDivElement, HeaderProps>(
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
-    const { user, isLoading, logout } = useAuth();
+    const { user, isLoading } = useAuth();
     const { cart } = useCart();
 
     const location = useLocation();
@@ -66,7 +66,6 @@ const Header = forwardRef<HTMLDivElement, HeaderProps>(
     }
 
     const handleLogout = async () => {
-      await logout("/login");
       setIsUserMenuOpen(false);
       navigate("/login");
     };

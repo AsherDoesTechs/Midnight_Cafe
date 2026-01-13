@@ -30,19 +30,14 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
 
       if (userError || !userData?.user?.id) {
         toast.error("Please log in to book your order.");
-        // Close modal before navigating to prevent UI overlapping
         setIsCartOpen(false);
         navigate("/login", { state: { from: "/booking" } });
         return;
       }
 
-      // Variable 'userId' removed to fix TS6133 (unused variable)
-      // We still have access to userData.user.id if needed later.
-
       localStorage.setItem("currentBookingCart", JSON.stringify(cart));
-
       navigate("/booking");
-      setIsCartOpen(false); // Close cart after successful redirection
+      setIsCartOpen(false);
     } catch (err) {
       console.error("Checkout error:", err);
       toast.error("An unexpected error occurred. Please try again.");
@@ -53,11 +48,9 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-end z-[100]">
-      {/* Clickable backdrop to close */}
       <div className="absolute inset-0" onClick={() => setIsCartOpen(false)} />
 
       <div className="relative w-80 bg-[#1A1A1A] h-full border-l border-[#2A2A2A] p-6 flex flex-col shadow-2xl">
-        {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-2xl font-bold text-[#D0C8B3]">Your Cart</h2>
           <button
@@ -69,7 +62,6 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
           </button>
         </div>
 
-        {/* Cart Items */}
         <div className="flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar">
           {cart.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-[#B8B1A0]">
@@ -78,7 +70,7 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
           ) : (
             cart.map((item) => (
               <div
-                key={item.id} // TS Error fixed: Ensure CartItem has 'id'
+                key={String(item.id)} // Ensures key is always a string
                 className="flex justify-between items-center bg-[#232323] p-4 rounded-lg border border-[#2A2A2A] hover:border-[#3A3A3A] transition-colors"
               >
                 <div className="flex-1">
@@ -91,7 +83,8 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
                   </p>
                 </div>
                 <button
-                  onClick={() => removeFromCart(item.id)}
+                  /* FIX: Explicitly cast to number if your context expects a number */
+                  onClick={() => removeFromCart(Number(item.id))}
                   className="ml-4 text-[#F1A7C5] text-xs font-bold uppercase tracking-wider hover:text-red-400 transition-colors"
                 >
                   Remove
@@ -101,7 +94,6 @@ export default function CartModal({ setIsCartOpen }: CartModalProps) {
           )}
         </div>
 
-        {/* Cart Total & Action */}
         <div className="mt-4 border-t border-[#2A2A2A] pt-6">
           <div className="flex justify-between items-center mb-4">
             <span className="text-[#888]">Subtotal</span>

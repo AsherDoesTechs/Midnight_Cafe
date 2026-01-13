@@ -18,27 +18,32 @@ const RecentBuys: React.FC = () => {
   useEffect(() => {
     const fetchOrderHistory = async () => {
       try {
-        const user = supabase.auth.user();
+        // FIX: Await the getUser call
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
         if (!user) {
           setRecentBuys([]);
           setLoading(false);
           return;
         }
 
+        // FIX: Remove the <OrderHistoryItem> from .from()
+        // and cast the data at the end or via the select
         const { data, error } = await supabase
-          .from<OrderHistoryItem>("orders")
+          .from("orders")
           .select("*")
           .eq("user_id", user.id)
           .order("created_at", { ascending: false });
 
         if (error) throw error;
 
-        // Format total and date if needed
-        const formattedData = data.map((order) => ({
+        const formattedData = (data as any[]).map((order) => ({
           ...order,
           total: order.total,
           date: new Date(order.date).toLocaleDateString(),
-        }));
+        })) as OrderHistoryItem[];
 
         setRecentBuys(formattedData);
       } catch (err) {
