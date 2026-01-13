@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { scroller } from "react-scroll";
-import { toast } from "react-toastify";
 import Header from "./components/Header";
 import { Coffee, Croissant, MessageCircle, Star, Clock } from "lucide-react";
 import cappucinoImage from "../assets/foods/Cappuccino_2.png";
@@ -54,7 +53,6 @@ const FeaturedItem: React.FC<FeaturedItemProps> = ({
   </div>
 );
 
-// --- HARDCODED FEATURED ITEMS ---
 const featuredItems: FeaturedItemProps[] = [
   {
     name: "Cappuccino",
@@ -81,19 +79,11 @@ const featuredItems: FeaturedItemProps[] = [
 ];
 
 export default function HomePage() {
-  const [showBackToTop, setShowBackToTop] = useState(false);
-  const [secretClicks, setSecretClicks] = useState(0);
-  const [sparklePositions, setSparklePositions] = useState<number[][]>([]);
   const [, setIsCartOpen] = useState(false);
-
-  const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    const handleScroll = () => setShowBackToTop(window.scrollY > 200);
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
   useEffect(() => {
@@ -108,30 +98,6 @@ export default function HomePage() {
     }
   }, [location]);
 
-  const handleBackToTop = () => {
-    scroller.scrollTo("hero", {
-      smooth: true,
-      duration: 500,
-      offset: -80,
-    });
-  };
-
-  const getRandomPosition = () => [
-    Math.random() * 60 + 10,
-    Math.random() * 60 + 10,
-  ];
-
-  const handleSecretAdminClick = () => {
-    setSecretClicks((prev) => prev + 1);
-    setSparklePositions((prev) => [...prev, getRandomPosition()]);
-
-    if (secretClicks + 1 >= 3) {
-      setSecretClicks(0);
-      toast.info("Admin access unlocked!", { autoClose: 2000 });
-      setTimeout(() => navigate("/admin-login"), 2100);
-    }
-  };
-
   const renderFeaturedContent = () => {
     return featuredItems.map((item, index) => (
       <FeaturedItem key={index} {...item} />
@@ -140,10 +106,6 @@ export default function HomePage() {
 
   return (
     <div className="w-full min-h-screen text-[#D0C8B3] bg-[#121212] relative overflow-hidden">
-      {/* FIX: We pass isCartOpen here. 
-          Even if Header doesn't strictly need it to function, 
-          reading the variable here solves the TypeScript error 6133.
-      */}
       <Header setIsCartOpen={setIsCartOpen} />
 
       {/* Hero Section */}
@@ -281,30 +243,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      {/* Back to Top */}
-      {showBackToTop && (
-        <button
-          onClick={handleBackToTop}
-          className="fixed bottom-10 right-10 bg-[#F1A7C5] text-[#121212] rounded-full p-4 shadow-lg hover:bg-[#F1A7C5]/90 transition-all z-40"
-        >
-          ↑
-        </button>
-      )}
-
-      {/* Secret Admin Easter Egg */}
-      <div
-        onClick={handleSecretAdminClick}
-        className="fixed bottom-4 left-4 w-6 h-6 cursor-pointer opacity-0 z-50"
-      >
-        {sparklePositions.map(([x, y], idx) => (
-          <div
-            key={idx}
-            className="absolute w-2 h-2 bg-yellow-300 rounded-full animate-ping"
-            style={{ left: x, top: y }}
-          />
-        ))}
-      </div>
     </div>
   );
 }
